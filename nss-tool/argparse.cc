@@ -4,7 +4,7 @@
 #include "argparse.h"
 #include "util.h"
 
-typedef std::unordered_map<std::string,std::string> stringMap;
+#define REQUIRED_ARG "__REQUIRED_ARG_"
 
 class ParsingException: public std::exception {
   virtual const char* what() const throw()
@@ -13,105 +13,81 @@ class ParsingException: public std::exception {
   }
 } parsingException;
 
-bool ArgParse::existsKeyInResultMap(const std::string& key) {
-  stringMap::const_iterator mapIter = this->resultMap.find(key);
-  if ( mapIter == this->resultMap.end() ) {
-    return false;
-  }
-  else {
-    return true;
-  }
-}
-
-ArgParse::ArgParse(const std::vector<std::string> _arguments, int requiredArgs, const stringMap _optionsMap) :
- arguments(_arguments), optionsMap(_optionsMap) {
+// Note: required args need not appear directly at the beginning, can also appear somewhere at the end
+ArgParse::ArgParse(const std::vector<std::string> _arguments, int requiredArgs, const std::vector<std::string> _optionsList) :
+ arguments(_arguments), optionsList(_optionsList) {
+   const std::string prefix("--");
    this->requiredArgs = requiredArgs;
    int remainingCmdTokens = this->arguments.size() - requiredArgs;
+   int requiredArgsFound = 0;
    if(remainingCmdTokens < 0) {
      std::cout << "Error: Not enough required arguments given!\n";
      throw parsingException;
    }
-   args = std::vector<std::string>(this->requiredArgs);
-   this->resultMap = stringMap();
-
-   // parse args
-   for(int i=0; i < this->requiredArgs; i++) {
-     this->args[i] = std::string(this->arguments.at(i));
-   }
 
    // parse options and parameters
-   for(uint64_t i=this->requiredArgs; i < this->arguments.size(); i++) {
-     std::string opt = std::string(this->arguments.at(i));
-     std::string param;
-
-     stringMap::const_iterator got = this->optionsMap.find(opt);
-     if ( got == this->optionsMap.end() ) {
-       std::cout << "Error: option " << opt << " not found or no valid option!\n";
-       throw parsingException;
-     }
-     else {
-       std::string type = got->second;
-       if(type != "none") {
+   for(uint64_t i=0; i < this->arguments.size(); i++) {
+     std::string arg = std::string(this->arguments.at(i));
+     std::cout << "parsing: " << arg << "...\n";
+     if(!arg.compare(0, prefix.size(), prefix)) {       // is option ?
+       if(i+1 < this->arguments.size() &&
+        this->arguments.at(i+1).compare(0, prefix.size(), prefix)) {  // is option argument ?
+         this->parsedArgs.push_back(std::make_tuple(arg, std::string(this->arguments.at(i+1))));
          i++;
-         if(i >= this->arguments.size()) {
-           std::cout << "Error: The option " << opt << " requires a parameter of type " << type << "\n";
-           std::cout << "But no parameter was given!\n";
-           throw parsingException;
-         }
-
-         param = std::string(this->arguments.at(i));
-         if(type == "int") {
-           // check type
-           if( ! isInteger(param) ) {
-             std:: cout << "Error! Given parameter " << param << " was no integer!";
-             throw parsingException;
-           }
-         }
-         else if(type != "string") {  // here could also be added other types: e.g. type != "string" || type != "bool"
-             std::cout << "Error: invalid value " << opt << " in option Map found!\n";
-             throw parsingException;
-         }
-       }
-
-       // save type
-       if (!existsKeyInResultMap(opt)) {
-         this->resultMap[opt] = param;
        }
        else {
-         // the parsed option was already given
-         std::cout << "Error: The option " << opt << " was given at least twice!\n";
-         throw parsingException;
+         this->parsedArgs.push_back(std::make_tuple(arg, std::string("true")));
        }
      }
+     else {
+       std::cout << "Required arg found: " << arg << "\n";
+       this->parsedArgs.push_back(std::make_tuple(this->arguments.at(i), REQUIRED_ARG));
+       requiredArgsFound++;
+     }
    }
- }
 
-std::vector<std::string> ArgParse::getArgs(void) {
-  return this->args;
+   // check number of required args
+   if(this->requiredArgs != requiredArgsFound) {
+     std::cout << "Error: " << this->requiredArgs <<
+        " requested, but " << requiredArgsFound << " found!\n";
+     throw parsingException;
+   }
 }
 
-stringMap ArgParse::getOptionsMap(void) {
-  return this->resultMap;
+std::string ArgParse::get(std::string argument) {
+   for(uint64_t i = 0; i < this->parsedArgs.size(); i++) {
+     argTuple_t current = this->parsedArgs.at(i);
+     if(std::get<0>(current) == argument) {
+       return std::get<1>(current);
+     }
+   }
+
+   return std::string("false");
+}
+
+bool ArgParse::getBool(std::string argument) {
+  return this->get(argument) == "true";
+}
+
+std::string ArgParse::getString(std::string argument) {
+  return this->get(argument);
+}
+
+int ArgParse::getInt(std::string argument) {
+  return 0;
 }
 
 void argParseTest(int argc, char **argv) {
-  stringMap optionsMap ( {{"--foo", "none"}, {"--bar", "int"}, {"--blubb", "string"}} );
-
   std::vector<std::string> arguments(argv+1, argv + argc);
-  //for(std::string str: arguments) {
-  //  std::cout << str << "\n";
-  //}
+  std::vector<std::string> options = {"--foo", "--bar", "--blubb"};
 
-  ArgParse p = ArgParse(arguments, 2, optionsMap);
-  std::vector<std::string> args = p.getArgs();
+  ArgParse p = ArgParse(arguments, 2, options);
+  std::string foo = p.get("--foo");
+  std::string bar = p.get("--bar");
+  std::string blubb = p.get("--blubb");
+  // no it would be the application which must interpret the parse tokens
+  // e.g. if they are boolean, int or string etc.
 
-  for(uint64_t i=0; i < args.size(); i++) {
-    std::cout << "Cmd arg at position " << i << ": " << args[i] << "\n";
-  }
-
-  std::cout << "Printing cmdOption,value mapping:\n";
-  stringMap ret = p.getOptionsMap();
-  for(std::pair<std::string, std::string> pair : ret) {
-    std::cout << pair.first << " " << pair.second << " \n";
-  }
+  std::cout << "--foo=" << foo << ", --bar=" << bar <<
+    ", blubb=" << blubb << "\n\n";
 }

@@ -7,8 +7,6 @@
 #include <exception>
 #include <unordered_map>
 
-typedef std::unordered_map<std::string,std::string> stringMap;
-
 /**
  * Class for parsing commandline options
  * Parsing is done in constructor and throws ParsingException on error.
@@ -18,18 +16,20 @@ typedef std::unordered_map<std::string,std::string> stringMap;
  */
 class ArgParse {
 public:
-  ArgParse(const std::vector<std::string> _arguments, int requiredArgs, const stringMap _optionsMap);
+  ArgParse(const std::vector<std::string> _arguments, int requiredArgs, const std::vector<std::string> _optionsList);
 
-  std::vector<std::string> getArgs(void);
-  stringMap getOptionsMap(void);
-  bool existsKeyInResultMap(const std::string& key);
+  std::string get(std::string argument);
+  bool getBool(std::string argument);
+  std::string getString(std::string argument);
+  int getInt(std::string argument);
 
 private:
+  typedef std::tuple<std::string, std::string> argTuple_t;
+
   const std::vector<std::string> arguments;   // readonly copy of argv without program name, command etc.
   int requiredArgs;
-  std::vector<std::string> args;
-  const stringMap optionsMap;                 // read only input map
-  stringMap resultMap;                        // output map with longopt -- paramValue mapping (or null if no param)
+  const std::vector<std::string> optionsList; // readonly list of options
+  std::vector<argTuple_t> parsedArgs;         // contains the parsed results
 };
 
 /*

@@ -17,7 +17,7 @@ static void usage() {
 }
 
 int main(int argc, char **argv) {
-  //argParseTest(argc, argv);
+  argParseTest(argc, argv);
   if(argc < 2) {
     std::cout << "Error: At least a command must be given!\n";
     usage();
@@ -32,6 +32,7 @@ int main(int argc, char **argv) {
     exit(0);
   }
   else if("cert" == command) {
+    /*
     stringMap optionsMap ( {{"--ascii", "none"}, {"--subject", "string"}, {"--outfile", "string"}} );
     std::vector<std::string> arguments(argv+2, argv + argc);
 
@@ -66,12 +67,14 @@ int main(int argc, char **argv) {
       tool.listPrivateKeys();
 
       tool.certificateRequest(subject, ascii); // subject must be according RFC 1485
+
     }
     else {
       // Error
       std::cout << "Error: Unkown subcommand '" << args[0] << "' for cert command given!\n";
       usage();
     }
+    */
   }
   else if("db" == command) {
 
