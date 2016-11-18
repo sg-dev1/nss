@@ -124,6 +124,13 @@
         }],
       ],
     },
+    {
+        'target_name': 'nss_tool',
+        'type': 'none',
+        'dependencies': [
+            'nss-tool/nss_tool.gyp:nss',
+        ],
+    },
   ],
   'conditions': [
     [ 'disable_tests==0', {
