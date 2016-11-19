@@ -5,6 +5,6 @@
 
 namespace nss_tool {
 
-  // TODO
+// TODO
 
 } /* end namespace nss_tool */

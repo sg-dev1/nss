@@ -9,14 +9,13 @@
 namespace nss_tool {
 
 class CertTool {
-public:
+ public:
   CertTool();
 
   void usage();
   int getError();
 
-private:
-
+ private:
 };
 
 } /* end namespace nss_tool */
