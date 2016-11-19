@@ -8,7 +8,7 @@
 // C++ includes
 #include <string>
 
-#include "nss_include.h"
+#include "../nss_include.h"
 
 static const char *const keyTypeName[] = {
     "null", "rsa", "dsa", "fortezza", "dh", "kea", "ec"

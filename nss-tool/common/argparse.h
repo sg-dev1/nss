@@ -5,7 +5,9 @@
 #include <vector>
 #include <string>
 #include <exception>
-#include <unordered_map>
+#include <tuple>
+
+#include "error.h"
 
 /**
  * Class for parsing commandline options
@@ -23,6 +25,10 @@ public:
   std::string getString(std::string argument);
   int getInt(std::string argument);
 
+  std::string getRequired(int pos);
+
+  int getError();
+
 private:
   typedef std::tuple<std::string, std::string> argTuple_t;
 
@@ -30,6 +36,10 @@ private:
   int requiredArgs;
   const std::vector<std::string> optionsList; // readonly list of options
   std::vector<argTuple_t> parsedArgs;         // contains the parsed results
+
+  bool parsingError = false;
+  bool elementNotFound = false;
+  bool outOfRangeError = false;
 };
 
 /*

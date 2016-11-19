@@ -9,10 +9,11 @@
       'target_name': 'nss',
       'type': 'executable',
       'sources': [
-        'main.cc',
-        'argparse.cc',
-        'nss_tool.cc',
-        'util.cc'
+        'nss_tools.cc',
+        'common/argparse.cc',
+        'common/nss_common.cc',
+        'common/util.cc',
+        'db/dbtool.cc',
       ],
       'dependencies': [
         '<(DEPTH)/exports.gyp:dbm_exports',
