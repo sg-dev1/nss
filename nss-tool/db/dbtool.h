@@ -9,7 +9,7 @@
 #include "../nss_include.h"
 #include "../common/error.h"
 
-//namespace nss_tool {
+namespace nss_tool {
 
 class DBTool {
 public:
@@ -25,6 +25,6 @@ private:
   bool cmdNotFound = false;
 };
 
-//} /* end namespace nss_tool */
+} /* end namespace nss_tool */
 
 #endif /* end of include guard: NSS_TOOL_DB_H */

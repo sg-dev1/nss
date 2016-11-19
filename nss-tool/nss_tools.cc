@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
     exit(1);
   }
   else if("db" == command) {
-    DBTool tool(arguments);
+    nss_tool::DBTool tool(arguments);
     if(tool.getError() != NO_ERROR) {
       usage();
       tool.usage();
@@ -42,5 +42,5 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
-  shutdownNSSTool();
+  nss_tool::shutdownNSSTool();
 }

@@ -5,6 +5,8 @@
 #include "error.h"
 #include "../nss_include.h"
 
+namespace nss_tool {
+
 int initNSSTool(std::string initDir) {
   PR_Init(PR_SYSTEM_THREAD, PR_PRIORITY_NORMAL, 1);
   const char *certPrefix = "";  // certutil -P option  --- can leave this empty
@@ -32,3 +34,5 @@ int shutdownNSSTool(void) {
   PR_Cleanup();
   return NO_ERROR;
 }
+
+} /* end namespace nss_tool */

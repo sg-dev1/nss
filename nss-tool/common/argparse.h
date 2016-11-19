@@ -21,7 +21,6 @@ class ArgParse {
 public:
   ArgParse(const std::vector<std::string> _arguments, int requiredArgs, const std::vector<std::string> _optionsList);
 
-  std::string get(std::string argument);
   bool getBool(std::string argument);
   std::string getString(std::string argument);
   int getInt(std::string argument);
@@ -32,6 +31,8 @@ public:
 
 private:
   typedef std::tuple<std::string, std::string> argTuple_t;
+
+  std::string get(std::string argument);
 
   const std::vector<std::string> arguments;   // readonly copy of argv without program name, command etc.
   int requiredArgs;

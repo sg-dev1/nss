@@ -7,6 +7,7 @@
 #include "../common/nss_common.h"
 #include "../common/scoped_ptrs.h"
 
+namespace nss_tool {
 
 // taken from secutil.c
 static void
@@ -53,7 +54,7 @@ DBTool::DBTool(std::vector<std::string> arguments) {
   if(parser.getError() != NO_ERROR) {
     dbDir = std::string(".");
   }
-  initNSSTool(dbDir);
+  nss_tool::initNSSTool(dbDir);
 
   std::string subcommand = parser.getRequired(0);
   if("list-certs" == subcommand) {
@@ -122,3 +123,5 @@ void DBTool::listCertificates() {
   }
   CERT_DestroyCertList(list);
 }
+
+} /* end namespace nss_tool */

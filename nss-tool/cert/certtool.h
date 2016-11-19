@@ -12,7 +12,8 @@ class CertTool {
 public:
   CertTool();
 
-  // TODO
+  void usage();
+  int getError();
 
 private:
 
