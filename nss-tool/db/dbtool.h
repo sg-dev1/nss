@@ -6,19 +6,19 @@
 
 #include <string>
 #include <vector>
-#include "../nss_include.h"
 #include "../common/error.h"
+#include "../nss_include.h"
 
 namespace nss_tool {
 
 class DBTool {
-public:
+ public:
   DBTool(std::vector<std::string> arguments);
 
   void usage();
   int getError();
 
-private:
+ private:
   void listCertificates();
 
   bool parserError = false;

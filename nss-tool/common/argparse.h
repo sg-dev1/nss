@@ -4,22 +4,24 @@
 #ifndef ARGPARSE_H
 #define ARGPARSE_H
 
-#include <vector>
-#include <string>
 #include <exception>
+#include <string>
 #include <tuple>
+#include <vector>
 #include "error.h"
 
 /**
  * Class for parsing commandline options
  * Parsing is done in constructor and throws ParsingException on error.
  * Results can be retrieved via getArgs() and getOptionsMap() functions.
- * All results are std::string, so f.e. conversion to int must be done afterwards,
+ * All results are std::string, so f.e. conversion to int must be done
+ * afterwards,
  *  however parameters are checked if valid string.
  */
 class ArgParse {
-public:
-  ArgParse(const std::vector<std::string> _arguments, int requiredArgs, const std::vector<std::string> _optionsList);
+ public:
+  ArgParse(const std::vector<std::string> _arguments, int requiredArgs,
+           const std::vector<std::string> _optionsList);
 
   bool getBool(std::string argument);
   std::string getString(std::string argument);
@@ -29,15 +31,16 @@ public:
 
   int getError();
 
-private:
+ private:
   typedef std::tuple<std::string, std::string> argTuple_t;
 
   std::string get(std::string argument);
 
-  const std::vector<std::string> arguments;   // readonly copy of argv without program name, command etc.
+  const std::vector<std::string>
+      arguments;  // readonly copy of argv without program name, command etc.
   int requiredArgs;
-  const std::vector<std::string> optionsList; // readonly list of options
-  std::vector<argTuple_t> parsedArgs;         // contains the parsed results
+  const std::vector<std::string> optionsList;  // readonly list of options
+  std::vector<argTuple_t> parsedArgs;          // contains the parsed results
 
   bool parsingError = false;
   bool elementNotFound = false;

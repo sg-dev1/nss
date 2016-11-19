@@ -3,14 +3,13 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
- // adapted version of gtests/common/scoped_ptrs.h
+// adapted version of gtests/common/scoped_ptrs.h
 
 #ifndef scoped_ptrs_h__
 #define scoped_ptrs_h__
 
 #include <memory>
 #include "../nss_include.h"
-
 
 struct ScopedDelete {
   void operator()(CERTCertificate* cert) { CERT_DestroyCertificate(cert); }
@@ -27,7 +26,7 @@ struct ScopedDelete {
   void operator()(SECKEYPublicKey* key) { SECKEY_DestroyPublicKey(key); }
   void operator()(SECKEYPrivateKey* key) { SECKEY_DestroyPrivateKey(key); }
 
-  void operator()(CERTCertList *list) { CERT_DestroyCertList(list); }
+  void operator()(CERTCertList* list) { CERT_DestroyCertList(list); }
 };
 
 template <class T>
@@ -55,6 +54,5 @@ SCOPED(SECKEYPrivateKey);
 SCOPED(CERTCertList);
 
 #undef SCOPED
-
 
 #endif

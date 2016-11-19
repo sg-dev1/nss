@@ -1,9 +1,9 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+#include <iostream>
 #include <string>
 #include <vector>
-#include <iostream>
 #include "common/argparse.h"
 #include "common/error.h"
 #include "common/nss_common.h"
@@ -14,22 +14,21 @@ static void usage() {
 }
 
 int main(int argc, char **argv) {
-  if(argc < 2) {
+  if (argc < 2) {
     std::cout << "Error: At least a command must be given!\n";
     usage();
     exit(1);
   }
 
   std::string command(argv[1]);
-  std::vector<std::string> arguments(argv+2, argv + argc);
+  std::vector<std::string> arguments(argv + 2, argv + argc);
 
-  if("help" == command) {
+  if ("help" == command) {
     usage();
     exit(1);
-  }
-  else if("db" == command) {
+  } else if ("db" == command) {
     nss_tool::DBTool tool(arguments);
-    if(tool.getError() != NO_ERROR) {
+    if (tool.getError() != NO_ERROR) {
       usage();
       tool.usage();
       exit(1);
