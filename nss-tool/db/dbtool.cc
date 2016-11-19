@@ -1,4 +1,6 @@
-
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include <iostream>
 #include "dbtool.h"
 #include "../common/argparse.h"
@@ -90,7 +92,6 @@ void DBTool::listCertificates() {
   list = PK11_ListCerts(PK11CertListAll, NULL);
   for (node = CERT_LIST_HEAD(list); !CERT_LIST_END(node, list);
     node = CERT_LIST_NEXT(node)) {
-    //SECU_PrintCertNickname(node, stdout);
     CERTCertTrust trust;
     CERTCertificate *cert;
     char trusts[30];

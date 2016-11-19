@@ -1,3 +1,6 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 /**
  * This module contains utility functions
  * partly taken from certutil
@@ -5,9 +8,7 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-// C++ includes
 #include <string>
-
 #include "../nss_include.h"
 
 static const char *const keyTypeName[] = {

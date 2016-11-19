@@ -1,8 +1,9 @@
-// C++ includes
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 #include <iostream>
 #include <algorithm>
-#include "assert.h"
-
+#include <assert.h>
 #include "argparse.h"
 #include "util.h"
 
@@ -100,7 +101,9 @@ std::string ArgParse::getRequired(int pos) {
   int curPos = 0;
   for(uint64_t i = 0; i < this->parsedArgs.size(); i++) {
     argTuple_t current = this->parsedArgs.at(i);
-    //std::cout << "current: (" << std::get<0>(current) << ", " << std::get<1>(current) << ")\n";
+#ifdef DEBUG
+    std::cout << "current: (" << std::get<0>(current) << ", " << std::get<1>(current) << ")\n";
+#endif /* DEBUG */
     if(std::get<1>(current) == REQUIRED_ARG) {
       if(curPos == pos) { // found!
         return std::get<0>(current);
@@ -123,26 +126,4 @@ int ArgParse::getError() {
   else {
     return NO_ERROR;
   }
-}
-
-void argParseTest(int argc, char **argv) {
-  std::vector<std::string> arguments(argv+1, argv + argc);
-  std::vector<std::string> options = {"--foo", "--bar", "--blubb"};
-
-  ArgParse p = ArgParse(arguments, 2, options);
-  std::string foo = p.get("--foo");
-  std::string bar = p.get("--bar");
-  std::string blubb = p.get("--blubb");
-  // now it would be the application which must interpret the parse tokens
-  // e.g. if they are boolean, int or string etc.
-  std::cout << "--foo=" << foo << ", --bar=" << bar <<
-    ", blubb=" << blubb << "\n\n";
-
-  // here with the interpreted API
-  bool fooBool = p.getBool("--foo");
-  std::string barString = p.getString("--bar");
-  int blubbInt = p.getInt("--blubb");
-  std::cout << "--foo=" << fooBool << ", --bar=" << barString <<
-    ", blubb=" << blubbInt << "\n\n";
-
 }

@@ -28,7 +28,6 @@ struct ScopedDelete {
   void operator()(SECKEYPrivateKey* key) { SECKEY_DestroyPrivateKey(key); }
 
   void operator()(CERTCertList *list) { CERT_DestroyCertList(list); }
-  //void operator()(CERTCertListNode *node) {  }
 };
 
 template <class T>
