@@ -120,16 +120,10 @@
             'cmd/smimetools/smimetools.gyp:cmsutil',
             'cmd/ssltap/ssltap.gyp:ssltap',
             'cmd/symkeyutil/symkeyutil.gyp:symkeyutil',
+            'nss-tool/nss_tool.gyp:nss',
           ],
         }],
       ],
-    },
-    {
-        'target_name': 'nss_tool',
-        'type': 'none',
-        'dependencies': [
-            'nss-tool/nss_tool.gyp:nss',
-        ],
     },
   ],
   'conditions': [
