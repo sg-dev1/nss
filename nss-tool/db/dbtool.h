@@ -17,7 +17,7 @@ class DBTool {
   ~DBTool();
 
   void usage();
-  int getError();
+  bool getError();
 
  private:
   void listCertificates();

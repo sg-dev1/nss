@@ -94,14 +94,10 @@ DBTool::~DBTool()
     }
 }
 
-int
+bool
 DBTool::getError()
 {
-    if (this->error) {
-        return 1;
-    } else {
-        return 0;
-    }
+    return this->error;
 }
 
 void
