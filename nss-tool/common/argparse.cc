@@ -47,7 +47,6 @@ ArgParser::parse(const std::vector<std::string> arguments)
     const std::string prefix("--");
     for (size_t i = 0; i < arguments.size(); i++) {
         std::string arg = arguments.at(i);
-        std::cout << "parsing: " << arg << "...\n";
         if (arg.compare(0, prefix.size(), prefix) == 0) { // is option ?
             // look for option in programArgs
             bool found = false;

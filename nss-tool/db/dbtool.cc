@@ -46,10 +46,8 @@ DBTool::usage()
 
 DBTool::DBTool(std::vector<std::string> arguments)
 {
-    // TODO (new) argparse
     ArgParser parser;
     std::shared_ptr<ArgObject> dbDir = std::make_shared<ArgObject>("--dbDir", "Sets the path of the database directory");
-    //ArgObject dbDir("--dbDir", "Sets the path of the database directory");
     parser.add(dbDir);
 
     if (!parser.parse(arguments)) {
@@ -59,10 +57,8 @@ DBTool::DBTool(std::vector<std::string> arguments)
         return;
     }
 
-    std::cout << "dbDir value=" << dbDir->getValue() + "\n";
     std::string initDir(".");
     if (dbDir->isPresent()) {
-        std::cout << "setting initDir\n";
         initDir = dbDir->getValue();
     }
     if (parser.getPositionalArgumentCount() != 1) {
@@ -109,10 +105,10 @@ DBTool::getError()
 void
 DBTool::listCertificates()
 {
-    CERTCertList *list;
+    ScopedCERTCertList list(PK11_ListCerts(PK11CertListAll, NULL));
     CERTCertListNode *node;
 
-    list = PK11_ListCerts(PK11CertListAll, NULL);
+    //list = PK11_ListCerts(PK11CertListAll, NULL);
     for (node = CERT_LIST_HEAD(list); !CERT_LIST_END(node, list);
          node = CERT_LIST_NEXT(node)) {
         CERTCertTrust trust;
@@ -143,7 +139,6 @@ DBTool::listCertificates()
         }
         printf("%-60s %-5s\n", name == NULL ? "(NULL)" : name, trusts);
     }
-    CERT_DestroyCertList(list);
 }
 
 } /* end namespace nss_tool */
