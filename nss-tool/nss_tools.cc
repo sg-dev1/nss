@@ -34,8 +34,8 @@ main(int argc, char **argv)
     PR_Init(PR_SYSTEM_THREAD, PR_PRIORITY_NORMAL, 1);
 
     std::vector<std::string> arguments(argv + 2, argv + argc);
-    nss_tool::DBTool tool(arguments);
-    if (tool.getError()) {
+    nss_tool::DBTool tool;
+    if (!tool.run(arguments)) {
         usage();
         tool.usage();
         return 1;

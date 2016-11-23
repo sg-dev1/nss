@@ -7,22 +7,25 @@
 
 #include <string>
 #include <vector>
-#include "../nss_include.h"
 
-namespace nss_tool {
+namespace nss_tool
+{
 
-class DBTool {
- public:
-  DBTool(std::vector<std::string> arguments);
-  ~DBTool();
+class DBTool
+{
+  public:
+    ~DBTool();
 
-  void usage();
-  bool getError();
+    /**
+     * DBTool's main method
+     * Returns true on success and false on error
+    */
+    bool run(std::vector<std::string> arguments);
 
- private:
-  void listCertificates();
+    void usage();
 
-  bool error = false;
+  private:
+    void listCertificates();
 };
 
 } /* end namespace nss_tool */

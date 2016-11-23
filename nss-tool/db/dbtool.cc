@@ -3,12 +3,17 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "dbtool.h"
+#include "../common/argparse.h"
+#include "../common/scoped_ptrs.h"
+
 #include <iostream>
 #include <iomanip>
 #include <memory>
 #include <sstream>
-#include "../common/argparse.h"
-#include "../common/scoped_ptrs.h"
+
+#include <cert.h>
+#include <nss.h>
+#include <certdb.h>
 
 namespace nss_tool
 {
@@ -57,7 +62,8 @@ DBTool::usage()
     std::cout << "    nss db [--dbdir] list-certs\n";
 }
 
-DBTool::DBTool(std::vector<std::string> arguments)
+bool
+DBTool::run(std::vector<std::string> arguments)
 {
     ArgParser parser;
     std::shared_ptr<ArgObject> dbDir = std::make_shared<ArgObject>("--dbDir", "Sets the path of the database directory");
@@ -66,8 +72,7 @@ DBTool::DBTool(std::vector<std::string> arguments)
     if (!parser.parse(arguments)) {
         // parsing error
         std::cout << "Parsing error!\n";
-        this->error = true;
-        return;
+        return false;
     }
 
     std::string initDir(".");
@@ -76,14 +81,12 @@ DBTool::DBTool(std::vector<std::string> arguments)
     }
     if (parser.getPositionalArgumentCount() != 1) {
         std::cout << "Positional Argument count wrong!\n";
-        this->error = true;
-        return;
+        return false;
     }
     std::string subCommand = parser.getPositionalArgument(0);
     if (subCommand != "list-certs") {
         std::cout << "Unsupported subcommand given!\n";
-        this->error = true;
-        return;
+        return false;
     }
     std::cout << "Using database directory: " << initDir << "\n";
 
@@ -92,13 +95,14 @@ DBTool::DBTool(std::vector<std::string> arguments)
     SECStatus rv =
         NSS_Initialize(initDir.c_str(), certPrefix, certPrefix, "secmod.db", 0);
     if (rv != SECSuccess) {
-        this->error = true;
         std::cout << "NSS init failed!\n";
-        return;
+        return false;
     }
 
     std::cout << "Listing certificates...\n";
     this->listCertificates();
+
+    return true;
 }
 
 DBTool::~DBTool()
@@ -107,12 +111,6 @@ DBTool::~DBTool()
     if (NSS_Shutdown() != SECSuccess) {
         std::cout << "NSS Shutdown failed!\n";
     }
-}
-
-bool
-DBTool::getError()
-{
-    return this->error;
 }
 
 void
