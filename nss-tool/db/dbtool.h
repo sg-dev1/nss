@@ -6,7 +6,6 @@
 
 #include <string>
 #include <vector>
-#include "../common/error.h"
 #include "../nss_include.h"
 
 namespace nss_tool {
@@ -14,6 +13,7 @@ namespace nss_tool {
 class DBTool {
  public:
   DBTool(std::vector<std::string> arguments);
+  ~DBTool();
 
   void usage();
   int getError();
@@ -21,8 +21,7 @@ class DBTool {
  private:
   void listCertificates();
 
-  bool parserError = false;
-  bool cmdNotFound = false;
+  bool error = false;
 };
 
 } /* end namespace nss_tool */

@@ -4,11 +4,9 @@
 #ifndef ARGPARSE_H
 #define ARGPARSE_H
 
-#include <exception>
 #include <string>
 #include <tuple>
 #include <vector>
-#include "error.h"
 
 /**
  * Class for parsing commandline options
