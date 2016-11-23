@@ -46,7 +46,34 @@ DBTool::usage()
 DBTool::DBTool(std::vector<std::string> arguments)
 {
     // TODO (new) argparse
-    std::string initDir("."); // this must be parsed from the argument (e.g. --dbdir if present)
+    ArgParser parser;
+    ArgObject dbDir("--dbDir", "Sets the path of the database directory");
+    parser.add(dbDir);
+
+    if (!parser.parse(arguments)) {
+        // parsing error
+        std::cout << "Parsing error!\n";
+        this->error = true;
+        return;
+    }
+
+    std::string initDir(".");
+    if (dbDir.isPresent()) {
+        std::cout << "setting initDir\n";
+        initDir = dbDir.getValue();
+    }
+    if (parser.getPositionalArgumentCount() != 1) {
+        std::cout << "Positional Argument count wrong!\n";
+        this->error = true;
+        return;
+    }
+    std::string subCommand = parser.getPositionalArgument(0);
+    if (subCommand != "list-certs") {
+        std::cout << "Unsupported subcommand given!\n";
+        this->error = true;
+        return;
+    }
+    std::cout << "Using database directory: " << initDir << "\n";
 
     // init NSS
     const char *certPrefix = ""; // certutil -P option  --- can leave this empty
@@ -54,36 +81,12 @@ DBTool::DBTool(std::vector<std::string> arguments)
         NSS_Initialize(initDir.c_str(), certPrefix, certPrefix, "secmod.db", 0);
     if (rv != SECSuccess) {
         this->error = true;
+        std::cout << "NSS init failed!\n";
         return;
     }
 
-    std::vector<std::string> options = { "--dbdir" };
-
-    ArgParse parser = ArgParse(arguments, 1, options);
-    if (parser.getError() != 0) {
-        this->error = true;
-        return;
-    }
-
-    std::string dbDir = parser.getString("--dbdir");
-    if (parser.getError() != 0) {
-        dbDir = std::string(".");
-    }
-    // here init nss tool in legacy code
-
-    std::string subcommand = parser.getRequired(0);
-    if ("list-certs" == subcommand) {
-        std::cout << "listing certificates...\n";
-        this->listCertificates();
-    } else if ("list-keys" == subcommand) {
-        std::cout << "listing keys...\n";
-        // TODO
-    } else if ("import" == subcommand) {
-        std::cout << "importing...\n";
-        // TODO import cert etc.
-    } else {
-        this->error = true;
-    }
+    std::cout << "Listing certificates...\n";
+    this->listCertificates();
 }
 
 DBTool::~DBTool()

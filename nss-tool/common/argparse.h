@@ -25,7 +25,7 @@ class ArgObject
     std::string value;
     const std::string description;
 
-    bool _isPresent;
+    bool _isPresent = false;
 };
 
 class ArgParser
