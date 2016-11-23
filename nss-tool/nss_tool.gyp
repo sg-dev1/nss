@@ -14,7 +14,6 @@
         'sources' : [
           'nss_tools.cc',
           'common/argparse.cc',
-          'common/nss_common.cc',
           'db/dbtool.cc',
         ],
         'dependencies' : [
