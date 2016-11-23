@@ -31,6 +31,7 @@ ArgObject::getValue()
 void
 ArgObject::setValue(std::string newValue)
 {
+    this->_isPresent = true;
     this->value = newValue;
 }
 
@@ -52,7 +53,7 @@ ArgParser::parse(const std::vector<std::string> arguments)
             bool found = false;
             int savedPos = -1;
             for (size_t j = 0; j < this->programArgs.size(); j++) {
-                if (this->programArgs.at(j).getArgument() == arg) {
+                if (this->programArgs.at(j)->getArgument() == arg) {
                     found = true;
                     savedPos = j;
                 }
@@ -65,10 +66,10 @@ ArgParser::parse(const std::vector<std::string> arguments)
             if (i + 1 < arguments.size() &&
                 arguments.at(i + 1).compare(0, prefix.size(),
                                             prefix)) {
-                this->programArgs.at(savedPos).setValue(std::string(arguments.at(i + 1)));
+                this->programArgs.at(savedPos)->setValue(std::string(arguments.at(i + 1)));
                 i++;
             } else {
-                this->programArgs.at(savedPos).setPresent();
+                this->programArgs.at(savedPos)->setPresent();
             }
         } else {
             // positional argument (e.g. required argument)
@@ -80,7 +81,7 @@ ArgParser::parse(const std::vector<std::string> arguments)
 }
 
 void
-ArgParser::add(ArgObject obj)
+ArgParser::add(std::shared_ptr<ArgObject> obj)
 {
     this->programArgs.push_back(obj);
 }

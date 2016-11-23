@@ -6,6 +6,7 @@
 #include <iostream>
 #include "../common/argparse.h"
 #include "../common/scoped_ptrs.h"
+#include <memory>
 
 namespace nss_tool
 {
@@ -47,7 +48,8 @@ DBTool::DBTool(std::vector<std::string> arguments)
 {
     // TODO (new) argparse
     ArgParser parser;
-    ArgObject dbDir("--dbDir", "Sets the path of the database directory");
+    std::shared_ptr<ArgObject> dbDir = std::make_shared<ArgObject>("--dbDir", "Sets the path of the database directory");
+    //ArgObject dbDir("--dbDir", "Sets the path of the database directory");
     parser.add(dbDir);
 
     if (!parser.parse(arguments)) {
@@ -57,10 +59,11 @@ DBTool::DBTool(std::vector<std::string> arguments)
         return;
     }
 
+    std::cout << "dbDir value=" << dbDir->getValue() + "\n";
     std::string initDir(".");
-    if (dbDir.isPresent()) {
+    if (dbDir->isPresent()) {
         std::cout << "setting initDir\n";
-        initDir = dbDir.getValue();
+        initDir = dbDir->getValue();
     }
     if (parser.getPositionalArgumentCount() != 1) {
         std::cout << "Positional Argument count wrong!\n";

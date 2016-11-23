@@ -7,6 +7,7 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 
 class ArgObject
 {
@@ -32,13 +33,13 @@ class ArgParser
 {
   public:
     bool parse(const std::vector<std::string> arguments);
-    void add(ArgObject obj);
+    void add(std::shared_ptr<ArgObject> obj);
 
     int getPositionalArgumentCount();
     std::string getPositionalArgument(int pos);
 
   private:
-    std::vector<ArgObject> programArgs;
+    std::vector<std::shared_ptr<ArgObject> > programArgs;
     std::vector<std::string> positionalArgs;
 };
 
