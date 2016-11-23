@@ -8,6 +8,28 @@
 #include <tuple>
 #include <vector>
 
+class ArgObject {
+public:
+  ArgObject(std::string argument, std::string description);
+  bool isPresent();
+  std::string getValue();
+
+  //  this should only be visible in this file (for the ArgParser)
+  void setValue(std::string newValue);
+private:
+  std::string argument;
+  std::string value;
+  std::string description;
+
+  bool _isPresent;
+};
+
+class ArgParser {
+public:
+
+private:
+};
+
 /**
  * Class for parsing commandline options
  * Parsing is done in constructor and throws ParsingException on error.
