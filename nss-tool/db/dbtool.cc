@@ -4,44 +4,57 @@
 
 #include "dbtool.h"
 #include <iostream>
+#include <iomanip>
+#include <memory>
+#include <sstream>
 #include "../common/argparse.h"
 #include "../common/scoped_ptrs.h"
-#include <memory>
 
 namespace nss_tool
 {
 
-// taken from secutil.c
-static void
-printflags(char *trusts, unsigned int flags)
+static std::string
+printFlags(unsigned int flags)
 {
-    if (flags & CERTDB_VALID_CA)
-        if (!(flags & CERTDB_TRUSTED_CA) && !(flags & CERTDB_TRUSTED_CLIENT_CA))
-            PORT_Strcat(trusts, "c");
-    if (flags & CERTDB_TERMINAL_RECORD)
-        if (!(flags & CERTDB_TRUSTED))
-            PORT_Strcat(trusts, "p");
-    if (flags & CERTDB_TRUSTED_CA)
-        PORT_Strcat(trusts, "C");
-    if (flags & CERTDB_TRUSTED_CLIENT_CA)
-        PORT_Strcat(trusts, "T");
-    if (flags & CERTDB_TRUSTED)
-        PORT_Strcat(trusts, "P");
-    if (flags & CERTDB_USER)
-        PORT_Strcat(trusts, "u");
-    if (flags & CERTDB_SEND_WARN)
-        PORT_Strcat(trusts, "w");
-    if (flags & CERTDB_INVISIBLE_CA)
-        PORT_Strcat(trusts, "I");
-    if (flags & CERTDB_GOVT_APPROVED_CA)
-        PORT_Strcat(trusts, "G");
-    return;
+    std::stringstream ss;
+    if (flags & CERTDB_VALID_CA) {
+        if (!(flags & CERTDB_TRUSTED_CA) && !(flags & CERTDB_TRUSTED_CLIENT_CA)) {
+            ss << "c";
+        }
+    }
+    if (flags & CERTDB_TERMINAL_RECORD) {
+        if (!(flags & CERTDB_TRUSTED)) {
+            ss << "p";
+        }
+    }
+    if (flags & CERTDB_TRUSTED_CA) {
+        ss << "C";
+    }
+    if (flags & CERTDB_TRUSTED_CLIENT_CA) {
+        ss << "T";
+    }
+    if (flags & CERTDB_TRUSTED) {
+        ss << "P";
+    }
+    if (flags & CERTDB_USER) {
+        ss << "u";
+    }
+    if (flags & CERTDB_SEND_WARN) {
+        ss << "w";
+    }
+    if (flags & CERTDB_INVISIBLE_CA) {
+        ss << "I";
+    }
+    if (flags & CERTDB_GOVT_APPROVED_CA) {
+        ss << "G";
+    }
+    return ss.str();
 }
 
 void
 DBTool::usage()
 {
-    std::cout << "    nss [--dbdir] list-certs\n";
+    std::cout << "    nss db [--dbdir] list-certs\n";
 }
 
 DBTool::DBTool(std::vector<std::string> arguments)
@@ -108,36 +121,35 @@ DBTool::listCertificates()
     ScopedCERTCertList list(PK11_ListCerts(PK11CertListAll, NULL));
     CERTCertListNode *node;
 
-    //list = PK11_ListCerts(PK11CertListAll, NULL);
     for (node = CERT_LIST_HEAD(list); !CERT_LIST_END(node, list);
          node = CERT_LIST_NEXT(node)) {
         CERTCertTrust trust;
         CERTCertificate *cert;
-        char trusts[30];
-        char *name = NULL;
+        std::string trusts;
+        std::string name;
 
         cert = node->cert;
 
-        PORT_Memset(trusts, 0, sizeof(trusts));
-
-        name = (char *)node->appData;
-        if (!name || !name[0]) {
-            name = cert->nickname;
-        }
-        if (!name || !name[0]) {
-            name = cert->emailAddr;
+        if (node->appData && ((char *)node->appData)[0]) {
+            name = std::string((char *)node->appData);
+        } else if (cert->nickname && cert->nickname[0]) {
+            name = std::string(cert->nickname);
+        } else if (cert->emailAddr && cert->emailAddr[0]) {
+            name = std::string(cert->emailAddr);
         }
 
         if (CERT_GetCertTrust(cert, &trust) == SECSuccess) {
-            printflags(trusts, trust.sslFlags);
-            PORT_Strcat(trusts, ",");
-            printflags(trusts, trust.emailFlags);
-            PORT_Strcat(trusts, ",");
-            printflags(trusts, trust.objectSigningFlags);
+            std::stringstream ss;
+            ss << printFlags(trust.sslFlags);
+            ss << ",";
+            ss << printFlags(trust.emailFlags);
+            ss << ",";
+            ss << printFlags(trust.objectSigningFlags);
+            trusts = ss.str();
         } else {
-            PORT_Memcpy(trusts, ",,", 3);
+            trusts = std::string(",,");
         }
-        printf("%-60s %-5s\n", name == NULL ? "(NULL)" : name, trusts);
+        std::cout << std::setw(60) << std::left << name << " " << trusts << "\n";
     }
 }
 
