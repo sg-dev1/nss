@@ -8,26 +8,38 @@
 #include <tuple>
 #include <vector>
 
-class ArgObject {
-public:
-  ArgObject(std::string argument, std::string description);
-  bool isPresent();
-  std::string getValue();
+class ArgObject
+{
+  public:
+    ArgObject(std::string _argument, std::string _description);
+    bool isPresent();
+    std::string getArgument();
+    std::string getValue();
 
-  //  this should only be visible in this file (for the ArgParser)
-  void setValue(std::string newValue);
-private:
-  std::string argument;
-  std::string value;
-  std::string description;
+    //  this should only be visible in this file (for the ArgParser)
+    void setValue(std::string newValue);
+    void setPresent();
 
-  bool _isPresent;
+  private:
+    const std::string argument;
+    std::string value;
+    const std::string description;
+
+    bool _isPresent;
 };
 
-class ArgParser {
-public:
+class ArgParser
+{
+  public:
+    bool parse(const std::vector<std::string> arguments);
+    void add(ArgObject obj);
 
-private:
+    int getPositionalArgumentCount();
+    std::string getPositionalArgument(int pos);
+
+  private:
+    std::vector<ArgObject> programArgs;
+    std::vector<std::string> positionalArgs;
 };
 
 /**
@@ -38,33 +50,34 @@ private:
  * afterwards,
  *  however parameters are checked if valid string.
  */
-class ArgParse {
- public:
-  ArgParse(const std::vector<std::string> _arguments, int requiredArgs,
-           const std::vector<std::string> _optionsList);
+class ArgParse
+{
+  public:
+    ArgParse(const std::vector<std::string> _arguments, int requiredArgs,
+             const std::vector<std::string> _optionsList);
 
-  bool getBool(std::string argument);
-  std::string getString(std::string argument);
-  int getInt(std::string argument);
+    bool getBool(std::string argument);
+    std::string getString(std::string argument);
+    int getInt(std::string argument);
 
-  std::string getRequired(int pos);
+    std::string getRequired(int pos);
 
-  int getError();
+    int getError();
 
- private:
-  typedef std::tuple<std::string, std::string> argTuple_t;
+  private:
+    typedef std::tuple<std::string, std::string> argTuple_t;
 
-  std::string get(std::string argument);
+    std::string get(std::string argument);
 
-  const std::vector<std::string>
-      arguments;  // readonly copy of argv without program name, command etc.
-  int requiredArgs;
-  const std::vector<std::string> optionsList;  // readonly list of options
-  std::vector<argTuple_t> parsedArgs;          // contains the parsed results
+    const std::vector<std::string>
+        arguments; // readonly copy of argv without program name, command etc.
+    int requiredArgs;
+    const std::vector<std::string> optionsList; // readonly list of options
+    std::vector<argTuple_t> parsedArgs;         // contains the parsed results
 
-  bool parsingError = false;
-  bool elementNotFound = false;
-  bool outOfRangeError = false;
+    bool parsingError = false;
+    bool elementNotFound = false;
+    bool outOfRangeError = false;
 };
 
 #endif /* end of include guard: ARGPARSE_H */
