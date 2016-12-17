@@ -28,9 +28,7 @@ class DBTool
 
   private:
     void listCertificates();
-    void importCertificate(std::string derFilePath, std::string certName);
-
-    ScopedPK11SlotInfo slot;
+    void importCertificate(const ScopedPK11SlotInfo &slot, std::string derFilePath, std::string certName);
 };
 
 } /* end namespace nss_tool */

@@ -112,8 +112,8 @@ DBTool::run(std::vector<std::string> arguments)
         return false;
     }
 
-    this->slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
-    if (this->slot.get() == nullptr) {
+    ScopedPK11SlotInfo slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
+    if (slot.get() == nullptr) {
         std::cout << "Error: Init PK11SlotInfo failed!\n";
         exit(1);
     }
@@ -123,7 +123,7 @@ DBTool::run(std::vector<std::string> arguments)
         this->listCertificates();
     } else { // subCommand == "import-cert"
         std::cout << "Importing a certificate...\n";
-        this->importCertificate(derFilePath, certName);
+        this->importCertificate(slot, derFilePath, certName);
     }
 
     return true;
@@ -179,7 +179,7 @@ DBTool::listCertificates()
 }
 
 void
-DBTool::importCertificate(std::string derFilePath, std::string certName)
+DBTool::importCertificate(const ScopedPK11SlotInfo &slot, std::string derFilePath, std::string certName)
 {
     SECItem certDER;
 
@@ -246,7 +246,7 @@ DBTool::importCertificate(std::string derFilePath, std::string certName)
 
     // TODO handle Cert Trust
 
-    SECStatus rv = PK11_ImportCert(this->slot.get(), cert.get(), CK_INVALID_HANDLE, certName.c_str(), PR_FALSE);
+    SECStatus rv = PK11_ImportCert(slot.get(), cert.get(), CK_INVALID_HANDLE, certName.c_str(), PR_FALSE);
     if (rv != SECSuccess) {
         // TODO handle authentication -> PK11_Authenticate (see certutil.c line 134)
         std::cout << "Error: Could not add certificate to database!\n";
