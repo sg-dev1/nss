@@ -48,17 +48,21 @@ ArgParser::parse(const std::vector<std::string> arguments)
     for (size_t i = 0; i < arguments.size(); i++) {
         std::string arg = arguments.at(i);
         if (arg.compare(0, prefix.size(), prefix) == 0) { // is option ?
+            //std::cout << "Processing " << arg << "...\n";
             // look for option in programArgs
             bool found = false;
             int savedPos = -1;
+            //std::cout << "programArgs size: " << this->programArgs.size() << "\n";
             for (size_t j = 0; j < this->programArgs.size(); j++) {
+                //std::cout << "\tprogramArg: " << programArgs.at(j)->getArgument() << "\n";
                 if (this->programArgs.at(j)->getArgument() == arg) {
                     found = true;
                     savedPos = j;
                 }
-                if (!found) { // error
-                    return false;
-                }
+            }
+            if (!found) { // error
+                std::cout << "Parsing Error: " << arg << " not found!\n";
+                return false;
             }
 
             // look for an option argument
@@ -82,6 +86,7 @@ ArgParser::parse(const std::vector<std::string> arguments)
 void
 ArgParser::add(std::shared_ptr<ArgObject> obj)
 {
+    //std::cout << "adding new ArgObject " << obj->getArgument() << "\n";
     this->programArgs.push_back(obj);
 }
 

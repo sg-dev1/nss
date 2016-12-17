@@ -10,6 +10,7 @@
 #include <iomanip>
 #include <memory>
 #include <sstream>
+#include <fstream>
 
 #include <cert.h>
 #include <nss.h>
@@ -59,15 +60,19 @@ printFlags(unsigned int flags)
 void
 DBTool::usage()
 {
-    std::cout << "    nss db [--dbdir] list-certs\n";
+    std::cout << "    nss db [--dbdir] [--derFile] [--certName] list-certs|import-cert\n";
 }
 
 bool
 DBTool::run(std::vector<std::string> arguments)
 {
     ArgParser parser;
-    std::shared_ptr<ArgObject> dbDir = std::make_shared<ArgObject>("--dbDir", "Sets the path of the database directory");
-    parser.add(dbDir);
+    std::shared_ptr<ArgObject> dbDirObj = std::make_shared<ArgObject>("--dbDir", "Sets the path of the database directory");
+    std::shared_ptr<ArgObject> derFileObj = std::make_shared<ArgObject>("--derFile", "Sets the path of a DER file to import");
+    std::shared_ptr<ArgObject> certNameObj = std::make_shared<ArgObject>("--certName", "Sets the name of an imported certificate");
+    parser.add(dbDirObj);
+    parser.add(derFileObj);
+    parser.add(certNameObj);
 
     if (!parser.parse(arguments)) {
         // parsing error
@@ -76,15 +81,23 @@ DBTool::run(std::vector<std::string> arguments)
     }
 
     std::string initDir(".");
-    if (dbDir->isPresent()) {
-        initDir = dbDir->getValue();
+    if (dbDirObj->isPresent()) {
+        initDir = dbDirObj->getValue();
+    }
+    std::string derFilePath;
+    if (derFileObj->isPresent()) {
+        derFilePath = std::string(derFileObj->getValue());
+    }
+    std::string certName("(no name)");
+    if (certNameObj->isPresent()) {
+        certName = std::string(certNameObj->getValue());
     }
     if (parser.getPositionalArgumentCount() != 1) {
         std::cout << "Positional Argument count wrong!\n";
         return false;
     }
     std::string subCommand = parser.getPositionalArgument(0);
-    if (subCommand != "list-certs") {
+    if (subCommand != "list-certs" && subCommand != "import-cert") {
         std::cout << "Unsupported subcommand given!\n";
         return false;
     }
@@ -99,8 +112,19 @@ DBTool::run(std::vector<std::string> arguments)
         return false;
     }
 
-    std::cout << "Listing certificates...\n";
-    this->listCertificates();
+    this->slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
+    if (this->slot.get() == nullptr) {
+        std::cout << "Error: Init PK11SlotInfo failed!\n";
+        exit(1);
+    }
+
+    if (subCommand == "list-certs") {
+        std::cout << "Listing certificates...\n";
+        this->listCertificates();
+    } else { // subCommand == "import-cert"
+        std::cout << "Importing a certificate...\n";
+        this->importCertificate(derFilePath, certName);
+    }
 
     return true;
 }
@@ -144,17 +168,77 @@ DBTool::listCertificates()
             ss << ",";
             ss << printFlags(trust.objectSigningFlags);
             trusts = ss.str();
+            if (trusts == ",,") {
+                trusts = std::string("(no trusts found)");
+            }
         } else {
-            trusts = std::string(",,");
+            trusts = std::string("(no trusts found)");
         }
         std::cout << std::setw(60) << std::left << name << " " << trusts << "\n";
     }
 }
 
 void
-DBTool::importCertificate(const ScopedSECItem &certDER)
+DBTool::importCertificate(std::string derFilePath, std::string certName)
 {
-    ScopedCERTCertificate cert(CERT_DecodeCertFromPackage((char *)certDER.get()->data, certDER.get()->len));
+    SECItem certDER;
+
+    if (derFilePath.empty()) {
+        // read from stdin
+        // implementation taken from certutil -> basicutil.c: secu_StdinToItem
+        // TODO improve
+        unsigned char buf[1000];
+        PRInt32 numBytes;
+
+        certDER.len = 0;
+        certDER.data = nullptr;
+        while (true) {
+            numBytes = PR_Read(PR_STDIN, buf, sizeof(buf));
+            if (numBytes < 0) {
+                std::cout << "Error reading from stdin!\n";
+                exit(-1);
+            }
+
+            if (numBytes == 0) {
+                break;
+            }
+
+            if (certDER.data != nullptr) {
+                unsigned char *p = certDER.data;
+                certDER.data = (unsigned char *)PORT_Realloc(p, certDER.len + numBytes);
+                if (!certDER.data) {
+                    PORT_Free(p);
+                }
+            } else {
+                certDER.data = (unsigned char *)PORT_Alloc(numBytes);
+            }
+
+            if (!certDER.data) {
+                std::cout << "Error reading from stdin!\n";
+                exit(-1);
+            }
+            PORT_Memcpy(certDER.data + certDER.len, buf, numBytes);
+            certDER.len += numBytes;
+        }
+    } else {
+        std::ifstream file(derFilePath.c_str(), std::ios::in | std::ios::binary | std::ios::ate);
+        if (!file.is_open()) {
+            std::cout << "Error: Could not open DER file " << derFilePath << "!\n";
+            exit(-1);
+        }
+
+        std::streampos size = file.tellg();
+        char *memblock = new char[size];
+        file.seekg(0, std::ios::beg);
+        file.read(memblock, size);
+        file.close();
+
+        certDER.data = (unsigned char *)memblock;
+        certDER.len = size;
+    }
+    //std::cout << "File read finished!\n";
+
+    ScopedCERTCertificate cert(CERT_DecodeCertFromPackage((char *)certDER.data, certDER.len));
     if (cert.get() == nullptr) {
         std::cout << "Error: Could not decode certificate!\n";
         exit(-1);
@@ -162,7 +246,7 @@ DBTool::importCertificate(const ScopedSECItem &certDER)
 
     // TODO handle Cert Trust
 
-    SECStatus rv = PK11_ImportCert(this->slot.get(), cert, CK_INVALID_HANDLE, "" /* name */, PR_FALSE);
+    SECStatus rv = PK11_ImportCert(this->slot.get(), cert.get(), CK_INVALID_HANDLE, certName.c_str(), PR_FALSE);
     if (rv != SECSuccess) {
         // TODO handle authentication -> PK11_Authenticate (see certutil.c line 134)
         std::cout << "Error: Could not add certificate to database!\n";
