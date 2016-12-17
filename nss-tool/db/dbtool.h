@@ -5,6 +5,8 @@
 #ifndef NSS_TOOL_DB_H
 #define NSS_TOOL_DB_H
 
+#include "../common/scoped_ptrs.h"
+
 #include <string>
 #include <vector>
 
@@ -26,6 +28,9 @@ class DBTool
 
   private:
     void listCertificates();
+    bool listPrivateKeys();
+
+    ScopedPK11SlotInfo slot;
 };
 
 } /* end namespace nss_tool */

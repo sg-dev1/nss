@@ -65,6 +65,11 @@ struct ScopedDelete {
     {
         CERT_DestroyCertList(list);
     }
+    void
+    operator()(SECKEYPrivateKeyList* list)
+    {
+        SECKEY_DestroyPrivateKeyList(list);
+    }
 };
 
 template <class T>
@@ -92,6 +97,7 @@ SCOPED(SECKEYPublicKey);
 SCOPED(SECKEYPrivateKey);
 
 SCOPED(CERTCertList);
+SCOPED(SECKEYPrivateKeyList);
 
 #undef SCOPED
 
