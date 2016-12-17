@@ -5,6 +5,8 @@
 #ifndef NSS_TOOL_DB_H
 #define NSS_TOOL_DB_H
 
+#include "../common/scoped_ptrs.h"
+
 #include <string>
 #include <vector>
 
@@ -26,6 +28,7 @@ class DBTool
 
   private:
     void listCertificates();
+    void importCertificate(const ScopedSECItem &secItem);
 };
 
 } /* end namespace nss_tool */

@@ -151,4 +151,23 @@ DBTool::listCertificates()
     }
 }
 
+void
+DBTool::importCertificate(const ScopedSECItem &certDER)
+{
+    ScopedCERTCertificate cert(CERT_DecodeCertFromPackage((char *)certDER.get()->data, certDER.get()->len));
+    if (cert.get() == nullptr) {
+        std::cout << "Error: Could not decode certificate!\n";
+        exit(-1);
+    }
+
+    // TODO handle Cert Trust
+
+    SECStatus rv = PK11_ImportCert(this->slot.get(), cert, CK_INVALID_HANDLE, "" /* name */, PR_FALSE);
+    if (rv != SECSuccess) {
+        // TODO handle authentication -> PK11_Authenticate (see certutil.c line 134)
+        std::cout << "Error: Could not add certificate to database!\n";
+        exit(-1);
+    }
+}
+
 } /* end namespace nss_tool */
