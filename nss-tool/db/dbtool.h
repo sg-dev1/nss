@@ -28,9 +28,7 @@ class DBTool
 
   private:
     void listCertificates();
-    bool listPrivateKeys();
-
-    ScopedPK11SlotInfo slot;
+    bool listPrivateKeys(const ScopedPK11SlotInfo &slot);
 };
 
 } /* end namespace nss_tool */

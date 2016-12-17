@@ -59,7 +59,7 @@ printFlags(unsigned int flags)
 void
 DBTool::usage()
 {
-    std::cout << "    nss db [--dbdir] list-certs\n";
+    std::cout << "    nss db [--dbdir] list-certs|list-keys\n";
 }
 
 bool
@@ -99,8 +99,8 @@ DBTool::run(std::vector<std::string> arguments)
         return false;
     }
 
-    this->slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
-    if (this->slot.get() == nullptr) {
+    ScopedPK11SlotInfo slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
+    if (slot.get() == nullptr) {
         std::cout << "Error: Init PK11SlotInfo failed!\n";
         exit(1);
     }
@@ -110,7 +110,7 @@ DBTool::run(std::vector<std::string> arguments)
         this->listCertificates();
     } else { // subCommand == "list-keys"
         std::cout << "Listing private keys...\n";
-        this->listPrivateKeys();
+        this->listPrivateKeys(slot);
     }
 
     return true;
@@ -189,9 +189,9 @@ stringToHex(const std::string &input)
 }
 
 bool
-DBTool::listPrivateKeys()
+DBTool::listPrivateKeys(const ScopedPK11SlotInfo &slot)
 {
-    ScopedSECKEYPrivateKeyList list(PK11_ListPrivateKeysInSlot(this->slot.get()));
+    ScopedSECKEYPrivateKeyList list(PK11_ListPrivateKeysInSlot(slot.get()));
     if (list.get() == nullptr) {
         std::cout << "Listing private keys failed!\n";
         return false;
