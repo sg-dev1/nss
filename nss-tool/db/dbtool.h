@@ -14,18 +14,19 @@ namespace nss_tool
 class DBTool
 {
   public:
-    ~DBTool();
+    DBTool() {}
+    ~DBTool() {}
 
     /**
      * DBTool's main method
      * Returns true on success and false on error
     */
-    bool run(std::vector<std::string> arguments);
+    bool Run(std::vector<std::string> arguments);
 
-    void usage();
+    void Usage();
 
   private:
-    void listCertificates();
+    void ListCertificates();
 };
 
 } /* end namespace nss_tool */

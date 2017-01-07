@@ -19,18 +19,14 @@ namespace nss_tool
 {
 
 static std::string
-printFlags(unsigned int flags)
+PrintFlags(unsigned int flags)
 {
     std::stringstream ss;
-    if (flags & CERTDB_VALID_CA) {
-        if (!(flags & CERTDB_TRUSTED_CA) && !(flags & CERTDB_TRUSTED_CLIENT_CA)) {
-            ss << "c";
-        }
+    if ((flags & CERTDB_VALID_CA) && !(flags & CERTDB_TRUSTED_CA) && !(flags & CERTDB_TRUSTED_CLIENT_CA)) {
+        ss << "c";
     }
-    if (flags & CERTDB_TERMINAL_RECORD) {
-        if (!(flags & CERTDB_TRUSTED)) {
-            ss << "p";
-        }
+    if ((flags & CERTDB_TERMINAL_RECORD) && !(flags & CERTDB_TRUSTED)) {
+        ss << "p";
     }
     if (flags & CERTDB_TRUSTED_CA) {
         ss << "C";
@@ -57,64 +53,57 @@ printFlags(unsigned int flags)
 }
 
 void
-DBTool::usage()
+DBTool::Usage()
 {
-    std::cout << "    nss db [--dbdir] list-certs\n";
+    std::cout << "    nss db [--db <directory>] list-certs" << std::endl;
 }
 
 bool
-DBTool::run(std::vector<std::string> arguments)
+DBTool::Run(std::vector<std::string> arguments)
 {
     ArgParser parser;
-    std::shared_ptr<ArgObject> dbDir = std::make_shared<ArgObject>("--dbDir", "Sets the path of the database directory");
-    parser.add(dbDir);
-
-    if (!parser.parse(arguments)) {
-        // parsing error
-        std::cout << "Parsing error!\n";
+    if (!parser.Parse(arguments)) {
+        std::cerr << "Parsing error!" << std::endl;
         return false;
     }
 
     std::string initDir(".");
-    if (dbDir->isPresent()) {
-        initDir = dbDir->getValue();
+    if (parser.Has("--db")) {
+        initDir = parser.Get("--db");
     }
-    if (parser.getPositionalArgumentCount() != 1) {
-        std::cout << "Positional Argument count wrong!\n";
+    if (parser.GetPositionalArgumentCount() != 1) {
+        std::cerr << "The dbtool requires at least one subcommand given!" << std::endl;
         return false;
     }
-    std::string subCommand = parser.getPositionalArgument(0);
+    std::string subCommand = parser.GetPositionalArgument(0);
     if (subCommand != "list-certs") {
-        std::cout << "Unsupported subcommand given!\n";
+        std::cerr << "Unsupported subcommand " << subCommand << " given!" << std::endl;
         return false;
     }
-    std::cout << "Using database directory: " << initDir << "\n";
+    std::cout << "Using database directory: " << initDir << std::endl;
 
     // init NSS
     const char *certPrefix = ""; // certutil -P option  --- can leave this empty
     SECStatus rv =
         NSS_Initialize(initDir.c_str(), certPrefix, certPrefix, "secmod.db", 0);
     if (rv != SECSuccess) {
-        std::cout << "NSS init failed!\n";
+        std::cerr << "NSS init failed!" << std::endl;
         return false;
     }
 
-    std::cout << "Listing certificates...\n";
-    this->listCertificates();
+    std::cout << "Listing certificates: " << std::endl;
+    this->ListCertificates();
+
+    // shutdown nss
+    if (NSS_Shutdown() != SECSuccess) {
+        std::cerr << "NSS Shutdown failed!" << std::endl;
+    }
 
     return true;
 }
 
-DBTool::~DBTool()
-{
-    // shutdown nss
-    if (NSS_Shutdown() != SECSuccess) {
-        std::cout << "NSS Shutdown failed!\n";
-    }
-}
-
 void
-DBTool::listCertificates()
+DBTool::ListCertificates()
 {
     ScopedCERTCertList list(PK11_ListCerts(PK11CertListAll, NULL));
     CERTCertListNode *node;
@@ -128,26 +117,26 @@ DBTool::listCertificates()
 
         cert = node->cert;
 
-        if (node->appData && ((char *)node->appData)[0]) {
-            name = std::string((char *)node->appData);
+        if (node->appData && static_cast<char *>(node->appData)[0]) {
+            name = static_cast<char *>(node->appData);
         } else if (cert->nickname && cert->nickname[0]) {
-            name = std::string(cert->nickname);
+            name = cert->nickname;
         } else if (cert->emailAddr && cert->emailAddr[0]) {
-            name = std::string(cert->emailAddr);
+            name = cert->emailAddr;
         }
 
         if (CERT_GetCertTrust(cert, &trust) == SECSuccess) {
             std::stringstream ss;
-            ss << printFlags(trust.sslFlags);
+            ss << PrintFlags(trust.sslFlags);
             ss << ",";
-            ss << printFlags(trust.emailFlags);
+            ss << PrintFlags(trust.emailFlags);
             ss << ",";
-            ss << printFlags(trust.objectSigningFlags);
+            ss << PrintFlags(trust.objectSigningFlags);
             trusts = ss.str();
         } else {
-            trusts = std::string(",,");
+            trusts = ",,";
         }
-        std::cout << std::setw(60) << std::left << name << " " << trusts << "\n";
+        std::cout << std::setw(60) << std::left << name << " " << trusts << std::endl;
     }
 }
 

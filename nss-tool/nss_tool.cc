@@ -12,34 +12,37 @@
 #include "db/dbtool.h"
 
 static void
-usage()
+Usage()
 {
-    std::cout << "Usage: nss <command> <subcommand> [options]\n";
+    std::cerr << "Usage: nss <command> <subcommand> [options]" << std::endl;
 }
 
 int
 main(int argc, char **argv)
 {
     if (argc < 2) {
-        std::cout << "Error: At least a command must be given!\n";
-        usage();
+        std::cerr << "Error: At least a command must be given!" << std::endl;
+        Usage();
         return 1;
     }
 
     std::string command(argv[1]);
     if ("db" != command) {
-        usage();
+        Usage();
         return 1;
     }
+    int result = 0;
     PR_Init(PR_SYSTEM_THREAD, PR_PRIORITY_NORMAL, 1);
 
     std::vector<std::string> arguments(argv + 2, argv + argc);
     nss_tool::DBTool tool;
-    if (!tool.run(arguments)) {
-        usage();
-        tool.usage();
-        return 1;
+    if (!tool.Run(arguments)) {
+        Usage();
+        tool.Usage();
+        result = 1;
     }
 
     PR_Cleanup();
+
+    return result;
 }

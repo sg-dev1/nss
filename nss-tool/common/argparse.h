@@ -7,40 +7,44 @@
 
 #include <string>
 #include <vector>
-#include <memory>
-
-class ArgObject
-{
-  public:
-    ArgObject(std::string _argument, std::string _description);
-    bool isPresent();
-    std::string getArgument();
-    std::string getValue();
-
-    //  this should only be visible in this file (for the ArgParser)
-    void setValue(std::string newValue);
-    void setPresent();
-
-  private:
-    const std::string argument;
-    std::string value;
-    const std::string description;
-
-    bool _isPresent = false;
-};
+#include <unordered_map>
 
 class ArgParser
 {
   public:
-    bool parse(const std::vector<std::string> arguments);
-    void add(std::shared_ptr<ArgObject> obj);
+    ArgParser() {}
+    ~ArgParser() {}
 
-    int getPositionalArgumentCount();
-    std::string getPositionalArgument(int pos);
+    bool Parse(const std::vector<std::string>& arguments);
+
+    bool
+    Has(std::string arg)
+    {
+        if (programArgs_.find(arg) != programArgs_.end()) {
+            return true;
+        }
+        return false;
+    }
+    std::string
+    Get(std::string arg)
+    {
+        return programArgs_[arg];
+    }
+
+    int
+    GetPositionalArgumentCount()
+    {
+        return positionalArgs_.size();
+    }
+    std::string
+    GetPositionalArgument(int pos)
+    {
+        return positionalArgs_.at(pos);
+    }
 
   private:
-    std::vector<std::shared_ptr<ArgObject> > programArgs;
-    std::vector<std::string> positionalArgs;
+    std::unordered_map<std::string, std::string> programArgs_;
+    std::vector<std::string> positionalArgs_;
 };
 
 #endif /* end of include guard: ARGPARSE_H */
