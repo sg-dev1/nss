@@ -4,8 +4,7 @@
 
 #include "argparse.h"
 
-bool
-ArgParser::Parse(const std::vector<std::string>& arguments)
+ArgParser::ArgParser(const std::vector<std::string>& arguments)
 {
     for (size_t i = 0; i < arguments.size(); i++) {
         std::string arg = arguments.at(i);
@@ -19,9 +18,7 @@ ArgParser::Parse(const std::vector<std::string>& arguments)
             }
         } else {
             // positional argument (e.g. required argument)
-            positionalArgs_.push_back(std::string(arg));
+            positionalArgs_.push_back(arg);
         }
     }
-
-    return true;
 }

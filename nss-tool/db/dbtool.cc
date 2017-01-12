@@ -15,9 +15,6 @@
 #include <nss.h>
 #include <certdb.h>
 
-namespace nss_tool
-{
-
 static std::string
 PrintFlags(unsigned int flags)
 {
@@ -55,32 +52,24 @@ PrintFlags(unsigned int flags)
 void
 DBTool::Usage()
 {
-    std::cout << "    nss db [--db <directory>] list-certs" << std::endl;
+    std::cerr << "Usage: nss db [--path <directory>] --list-certs" << std::endl;
 }
 
 bool
 DBTool::Run(std::vector<std::string> arguments)
 {
-    ArgParser parser;
-    if (!parser.Parse(arguments)) {
-        std::cerr << "Parsing error!" << std::endl;
-        return false;
-    }
+    ArgParser parser(arguments);
 
     std::string initDir(".");
-    if (parser.Has("--db")) {
-        initDir = parser.Get("--db");
+    if (parser.Has("--path")) {
+        initDir = parser.Get("--path");
     }
-    if (parser.GetPositionalArgumentCount() != 1) {
-        std::cerr << "The dbtool requires at least one subcommand given!" << std::endl;
+
+    if (!parser.Has("--list-certs")) {
         return false;
     }
-    std::string subCommand = parser.GetPositionalArgument(0);
-    if (subCommand != "list-certs") {
-        std::cerr << "Unsupported subcommand " << subCommand << " given!" << std::endl;
-        return false;
-    }
-    std::cout << "Using database directory: " << initDir << std::endl;
+    std::cout << "Using database directory: " << initDir << std::endl
+              << std::endl;
 
     // init NSS
     const char *certPrefix = ""; // certutil -P option  --- can leave this empty
@@ -91,12 +80,12 @@ DBTool::Run(std::vector<std::string> arguments)
         return false;
     }
 
-    std::cout << "Listing certificates: " << std::endl;
-    this->ListCertificates();
+    ListCertificates();
 
     // shutdown nss
     if (NSS_Shutdown() != SECSuccess) {
         std::cerr << "NSS Shutdown failed!" << std::endl;
+        return false;
     }
 
     return true;
@@ -105,26 +94,33 @@ DBTool::Run(std::vector<std::string> arguments)
 void
 DBTool::ListCertificates()
 {
-    ScopedCERTCertList list(PK11_ListCerts(PK11CertListAll, NULL));
+    ScopedCERTCertList list(PK11_ListCerts(PK11CertListAll, nullptr));
     CERTCertListNode *node;
 
+    std::cout << std::setw(60) << std::left << "Certificate Nickname"
+              << " "
+              << "Trust Attributes" << std::endl;
+    std::cout << std::setw(60) << std::left << ""
+              << " "
+              << "SSL,S/MIME,JAR/XPI" << std::endl
+              << std::endl;
     for (node = CERT_LIST_HEAD(list); !CERT_LIST_END(node, list);
          node = CERT_LIST_NEXT(node)) {
-        CERTCertTrust trust;
-        CERTCertificate *cert;
-        std::string trusts;
-        std::string name;
 
-        cert = node->cert;
+        CERTCertificate *cert = node->cert;
 
-        if (node->appData && static_cast<char *>(node->appData)[0]) {
-            name = static_cast<char *>(node->appData);
-        } else if (cert->nickname && cert->nickname[0]) {
+        std::string name("(unknown)");
+        char *tmp = static_cast<char *>(node->appData);
+        if (tmp && strlen(tmp) > 0) {
+            name = tmp;
+        } else if (cert->nickname && strlen(cert->nickname) > 0) {
             name = cert->nickname;
-        } else if (cert->emailAddr && cert->emailAddr[0]) {
+        } else if (cert->emailAddr && strlen(cert->emailAddr) > 0) {
             name = cert->emailAddr;
         }
 
+        CERTCertTrust trust;
+        std::string trusts;
         if (CERT_GetCertTrust(cert, &trust) == SECSuccess) {
             std::stringstream ss;
             ss << PrintFlags(trust.sslFlags);
@@ -139,5 +135,3 @@ DBTool::ListCertificates()
         std::cout << std::setw(60) << std::left << name << " " << trusts << std::endl;
     }
 }
-
-} /* end namespace nss_tool */

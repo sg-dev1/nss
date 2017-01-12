@@ -15,34 +15,33 @@ static void
 Usage()
 {
     std::cerr << "Usage: nss <command> <subcommand> [options]" << std::endl;
+    std::cerr << "       nss db [--path <directory>] --list-certs" << std::endl;
 }
 
 int
 main(int argc, char **argv)
 {
     if (argc < 2) {
-        std::cerr << "Error: At least a command must be given!" << std::endl;
         Usage();
         return 1;
     }
 
-    std::string command(argv[1]);
-    if ("db" != command) {
+    if (std::string(argv[1]) != "db") {
         Usage();
         return 1;
     }
-    int result = 0;
+
+    int exit_code = 0;
     PR_Init(PR_SYSTEM_THREAD, PR_PRIORITY_NORMAL, 1);
 
     std::vector<std::string> arguments(argv + 2, argv + argc);
-    nss_tool::DBTool tool;
+    DBTool tool;
     if (!tool.Run(arguments)) {
-        Usage();
         tool.Usage();
-        result = 1;
+        exit_code = 1;
     }
 
     PR_Cleanup();
 
-    return result;
+    return exit_code;
 }

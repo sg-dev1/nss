@@ -8,15 +8,9 @@
 #include <string>
 #include <vector>
 
-namespace nss_tool
-{
-
 class DBTool
 {
   public:
-    DBTool() {}
-    ~DBTool() {}
-
     /**
      * DBTool's main method
      * Returns true on success and false on error
@@ -28,7 +22,5 @@ class DBTool
   private:
     void ListCertificates();
 };
-
-} /* end namespace nss_tool */
 
 #endif /* end of include guard: NSS_TOOL_DB_H */

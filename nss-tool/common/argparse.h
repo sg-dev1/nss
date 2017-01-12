@@ -12,18 +12,12 @@
 class ArgParser
 {
   public:
-    ArgParser() {}
-    ~ArgParser() {}
-
-    bool Parse(const std::vector<std::string>& arguments);
+    ArgParser(const std::vector<std::string>& arguments);
 
     bool
     Has(std::string arg)
     {
-        if (programArgs_.find(arg) != programArgs_.end()) {
-            return true;
-        }
-        return false;
+        return programArgs_.count(arg) > 0;
     }
     std::string
     Get(std::string arg)
