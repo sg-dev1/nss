@@ -17,6 +17,8 @@ class DBTool {
  private:
   bool PathHasDBFiles(std::string path);
   void ListCertificates();
+  bool ImportCertificate(std::string derFilePath, std::string certName,
+                         std::string trustString);
 };
 
 #endif  // dbtool_h__

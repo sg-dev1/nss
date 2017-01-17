@@ -7,6 +7,7 @@
 #include "scoped_ptrs.h"
 
 #include <dirent.h>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -52,8 +53,11 @@ static std::string PrintFlags(unsigned int flags) {
 }
 
 void DBTool::Usage() {
-  std::cerr << "Usage: nss db [--path <directory>] [--create] --list-certs"
-            << std::endl;
+  std::cerr << "Usage: nss db [--path <directory>] [--create]" << std::endl;
+  std::cerr << "  --list-certs" << std::endl;
+  std::cerr
+      << "  --import-cert [<path> [--certName <name>] [--trusts <trusts>]]"
+      << std::endl;
 }
 
 bool DBTool::Run(const std::vector<std::string> &arguments) {
@@ -70,8 +74,22 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
     }
   }
 
-  if (!parser.Has("--list-certs") && !parser.Has("--create")) {
+  if (!parser.Has("--list-certs") && !parser.Has("--create") &&
+      !parser.Has("--import-cert")) {
     return false;
+  }
+
+  std::string derFilePath("(not set)");
+  std::string certName("(default)");
+  std::string trusts("TCu,Cu,Tu");
+  if (parser.Has("--import-cert")) {
+    derFilePath = parser.Get("--import-cert");
+    if (parser.Has("--certName")) {
+      certName = parser.Get("--certName");
+    }
+    if (parser.Has("--trusts")) {
+      trusts = parser.Get("--trusts");
+    }
   }
   std::cout << "Using database directory: " << initDir << std::endl
             << std::endl;
@@ -100,8 +118,11 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
     return false;
   }
 
-  if (parser.Has("--list-certs")) {
+  bool ret = true;
+  if ("(not set)" == derFilePath) {
     ListCertificates();
+  } else {
+    ret = ImportCertificate(derFilePath, certName, trusts);
   }
 
   if (parser.Has("--create")) {
@@ -114,7 +135,7 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
     return false;
   }
 
-  return true;
+  return ret;
 }
 
 bool DBTool::PathHasDBFiles(std::string path) {
@@ -184,4 +205,88 @@ void DBTool::ListCertificates() {
     std::cout << std::setw(60) << std::left << name << " " << trusts
               << std::endl;
   }
+}
+
+bool DBTool::ImportCertificate(std::string derFilePath, std::string certName,
+                               std::string trustString) {
+  ScopedPK11SlotInfo slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
+  if (slot.get() == nullptr) {
+    std::cerr << "Error: Init PK11SlotInfo failed!\n";
+    return false;
+  }
+
+  std::unique_ptr<char> certData;
+  size_t certDataSize = 0;
+  if (derFilePath.empty()) {
+    // read from stdin
+    std::cout << "No DER file path was given! So stdin is used!" << std::endl;
+
+    char buf[1000];
+    PRInt32 numBytes;
+
+    while (true) {
+      numBytes = PR_Read(PR_STDIN, buf, sizeof(buf));
+      if (numBytes < 0) {
+        std::cerr << "Error reading from stdin!" << std::endl;
+        return false;
+      } else if (numBytes == 0) {
+        break;
+      }
+
+      certData = std::unique_ptr<char>(new char[certDataSize + numBytes]);
+      if (!certData.get()) {
+        std::cerr << "Out of memory error!" << std::endl;
+        return false;
+      }
+
+      PORT_Memcpy(certData.get() + certDataSize, buf, numBytes);
+      certDataSize += numBytes;
+    }
+  } else {
+    std::ifstream file(derFilePath.c_str(),
+                       std::ios::in | std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+      std::cerr << "Error: Could not open DER file " << derFilePath << "!"
+                << std::endl;
+      return false;
+    }
+
+    std::streampos size = file.tellg();
+    certData = std::unique_ptr<char>(new char[size]);
+    file.seekg(0, std::ios::beg);
+    file.read(certData.get(), size);
+    file.close();
+    certDataSize = size;
+  }
+
+  ScopedCERTCertificate cert(
+      CERT_DecodeCertFromPackage(certData.get(), certDataSize));
+  if (cert.get() == nullptr) {
+    std::cerr << "Error: Could not decode certificate!" << std::endl;
+    return false;
+  }
+
+  SECStatus rv = PK11_ImportCert(slot.get(), cert.get(), CK_INVALID_HANDLE,
+                                 certName.c_str(), PR_FALSE);
+  if (rv != SECSuccess) {
+    // TODO handle authentication -> PK11_Authenticate (see certutil.c line
+    // 134)
+    std::cerr << "Error: Could not add certificate to database!" << std::endl;
+    return false;
+  }
+
+  CERTCertTrust trust;
+  rv = CERT_DecodeTrustString(&trust, trustString.c_str());
+  if (rv != SECSuccess) {
+    std::cerr << "Cannot decode trust string!" << std::endl;
+    return false;
+  }
+  rv = CERT_ChangeCertTrust(CERT_GetDefaultCertDB(), cert.get(), &trust);
+  if (rv != SECSuccess) {
+    std::cerr << "Cannot change cert's trust" << std::endl;
+    return false;
+  }
+
+  std::cout << "Certificate import was successful!" << std::endl;
+  return true;
 }
