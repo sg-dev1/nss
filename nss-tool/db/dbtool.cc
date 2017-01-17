@@ -74,23 +74,11 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
     }
   }
 
-  if (!parser.Has("--list-certs") && !parser.Has("--create") &&
-      !parser.Has("--import-cert")) {
+  if (!parser.Has("--create") &&
+      (parser.Has("--list-certs") == parser.Has("--import-cert"))) {
     return false;
   }
 
-  std::string derFilePath("(not set)");
-  std::string certName("(default)");
-  std::string trusts("TCu,Cu,Tu");
-  if (parser.Has("--import-cert")) {
-    derFilePath = parser.Get("--import-cert");
-    if (parser.Has("--certName")) {
-      certName = parser.Get("--certName");
-    }
-    if (parser.Has("--trusts")) {
-      trusts = parser.Get("--trusts");
-    }
-  }
   std::cout << "Using database directory: " << initDir << std::endl
             << std::endl;
 
@@ -119,10 +107,10 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
   }
 
   bool ret = true;
-  if ("(not set)" == derFilePath) {
+  if (parser.Has("--list-certs")) {
     ListCertificates();
   } else {
-    ret = ImportCertificate(derFilePath, certName, trusts);
+    ret = ImportCertificate(parser);
   }
 
   if (parser.Has("--create")) {
@@ -207,60 +195,45 @@ void DBTool::ListCertificates() {
   }
 }
 
-bool DBTool::ImportCertificate(std::string derFilePath, std::string certName,
-                               std::string trustString) {
+static std::vector<char> ReadFromIstream(std::istream &is) {
+  std::vector<char> certData;
+  while (is) {
+    char buf[1024];
+    is.read(buf, sizeof(buf));
+    certData.insert(certData.end(), buf, buf + is.gcount());
+  }
+
+  return certData;
+}
+
+bool DBTool::ImportCertificate(ArgParser parser) {
+  std::string derFilePath = parser.Get("--import-cert");
+  std::string certName("(default)");
+  std::string trustString("TCu,Cu,Tu");
+  if (parser.Has("--certName")) {
+    certName = parser.Get("--certName");
+  }
+  if (parser.Has("--trusts")) {
+    trustString = parser.Get("--trusts");
+  }
+
   ScopedPK11SlotInfo slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
   if (slot.get() == nullptr) {
     std::cerr << "Error: Init PK11SlotInfo failed!\n";
     return false;
   }
 
-  std::unique_ptr<char> certData;
-  size_t certDataSize = 0;
+  std::vector<char> certData;
   if (derFilePath.empty()) {
-    // read from stdin
-    std::cout << "No DER file path was given! So stdin is used!" << std::endl;
-
-    char buf[1000];
-    PRInt32 numBytes;
-
-    while (true) {
-      numBytes = PR_Read(PR_STDIN, buf, sizeof(buf));
-      if (numBytes < 0) {
-        std::cerr << "Error reading from stdin!" << std::endl;
-        return false;
-      } else if (numBytes == 0) {
-        break;
-      }
-
-      certData = std::unique_ptr<char>(new char[certDataSize + numBytes]);
-      if (!certData.get()) {
-        std::cerr << "Out of memory error!" << std::endl;
-        return false;
-      }
-
-      PORT_Memcpy(certData.get() + certDataSize, buf, numBytes);
-      certDataSize += numBytes;
-    }
+    std::cout << "No DER file path given, using stdin." << std::endl;
+    certData = ReadFromIstream(std::cin);
   } else {
-    std::ifstream file(derFilePath.c_str(),
-                       std::ios::in | std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-      std::cerr << "Error: Could not open DER file " << derFilePath << "!"
-                << std::endl;
-      return false;
-    }
-
-    std::streampos size = file.tellg();
-    certData = std::unique_ptr<char>(new char[size]);
-    file.seekg(0, std::ios::beg);
-    file.read(certData.get(), size);
-    file.close();
-    certDataSize = size;
+    std::ifstream is(derFilePath, std::ifstream::binary);
+    certData = ReadFromIstream(is);
   }
 
   ScopedCERTCertificate cert(
-      CERT_DecodeCertFromPackage(certData.get(), certDataSize));
+      CERT_DecodeCertFromPackage(certData.data(), certData.size()));
   if (cert.get() == nullptr) {
     std::cerr << "Error: Could not decode certificate!" << std::endl;
     return false;
@@ -288,5 +261,6 @@ bool DBTool::ImportCertificate(std::string derFilePath, std::string certName,
   }
 
   std::cout << "Certificate import was successful!" << std::endl;
+  // TODO show information about imported certificate
   return true;
 }
