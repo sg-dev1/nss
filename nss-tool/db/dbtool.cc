@@ -59,7 +59,7 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
   std::string initDir(".");
   if (parser.Has("--path")) {
     initDir = parser.Get("--path");
-    if (PR_Access(initDir.c_str(), PR_ACCESS_WRITE_OK) != PR_SUCCESS) {
+    if (PR_Access(initDir.c_str(), PR_ACCESS_READ_OK) != PR_SUCCESS) {
       std::cerr << "Directory '" << initDir
                 << "' does not exists or you don't have permissions!"
                 << std::endl;
