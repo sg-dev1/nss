@@ -64,7 +64,7 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
     initDir = parser.Get("--path");
     if (PR_Access(initDir.c_str(), PR_ACCESS_READ_OK) != PR_SUCCESS) {
       std::cerr << "Directory '" << initDir
-                << "' does not exists or you don't have permissions!"
+                << "' does not exist or you don't have permissions!"
                 << std::endl;
       return false;
     }
@@ -76,13 +76,14 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
   std::cout << "Using database directory: " << initDir << std::endl
             << std::endl;
 
-  bool dbFilesExist = checkIfDBExists(initDir);
+  bool dbFilesExist = PathHasDBFiles(initDir);
   if (parser.Has("--create") && dbFilesExist) {
     std::cerr << "Trying to create database files in a directory where they "
                  "already exists. Delete the db files before creating new ones."
               << std::endl;
     return false;
-  } else if (!parser.Has("--create") && !dbFilesExist) {
+  }
+  if (!parser.Has("--create") && !dbFilesExist) {
     std::cerr << "No db files found." << std::endl;
     std::cerr << "Create them using 'nss db --create [--path /foo/bar]' before "
                  "continuing."
@@ -116,28 +117,28 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
   return true;
 }
 
-bool DBTool::checkIfDBExists(std::string path) {
+bool DBTool::PathHasDBFiles(std::string path) {
   std::regex certDBPattern("cert.*\\.db");
   std::regex keyDBPattern("key.*\\.db");
-  std::string secmodDB("secmod.db");
 
   DIR *dir;
-  struct dirent *ent;
-  bool dbFileExists = false;
-  if ((dir = opendir(path.c_str())) != NULL) {
-    while ((ent = readdir(dir)) != NULL) {
-      if (std::regex_match(ent->d_name, certDBPattern) ||
-          std::regex_match(ent->d_name, keyDBPattern) ||
-          secmodDB == ent->d_name) {
-        dbFileExists = true;
-      }
-    }
-    closedir(dir);
-  } else {
+  if (!(dir = opendir(path.c_str()))) {
     std::cerr << "Directory " << path << " could not be accessed!" << std::endl;
     return false;
   }
 
+  struct dirent *ent;
+  bool dbFileExists = false;
+  while ((ent = readdir(dir))) {
+    if (std::regex_match(ent->d_name, certDBPattern) ||
+        std::regex_match(ent->d_name, keyDBPattern) ||
+        "secmod.db" == std::string(ent->d_name)) {
+      dbFileExists = true;
+      break;
+    }
+  }
+
+  closedir(dir);
   return dbFileExists;
 }
 

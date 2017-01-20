@@ -15,7 +15,7 @@ class DBTool {
   void Usage();
 
  private:
-  bool checkIfDBExists(std::string path);
+  bool PathHasDBFiles(std::string path);
   void ListCertificates();
 };
 
