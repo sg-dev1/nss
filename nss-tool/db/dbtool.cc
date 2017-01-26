@@ -64,7 +64,8 @@ static std::vector<char> ReadFromIstream(std::istream &is) {
 }
 
 void DBTool::Usage() {
-  std::cerr << "Usage: nss db [--path <directory>] [--create]" << std::endl;
+  std::cerr << "Usage: nss db [--path <directory>]" << std::endl;
+  std::cerr << "  --create" << std::endl;
   std::cerr << "  --list-certs" << std::endl;
   std::cerr << "  --import-cert [<path>] --name <name> [--trusts <trusts>]"
             << std::endl;
@@ -73,8 +74,8 @@ void DBTool::Usage() {
 bool DBTool::Run(const std::vector<std::string> &arguments) {
   ArgParser parser(arguments);
 
-  if (!parser.Has("--create") &&
-      (parser.Has("--list-certs") == parser.Has("--import-cert"))) {
+  if (!parser.Has("--create") && !parser.Has("--list-certs") &&
+      !parser.Has("--import-cert")) {
     return false;
   }
 
@@ -129,11 +130,9 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
   bool ret = true;
   if (parser.Has("--list-certs")) {
     ListCertificates();
-  } else {
+  } else if (parser.Has("--import-cert")) {
     ret = ImportCertificate(parser);
-  }
-
-  if (parser.Has("--create")) {
+  } else if (parser.Has("--create")) {
     std::cout << "DB files created successfully." << std::endl;
   }
 
