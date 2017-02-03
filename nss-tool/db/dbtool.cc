@@ -79,25 +79,21 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
     return false;
   }
 
-  PRAccessHow how;
-  bool readOnly;
-  if (parser.Has("--create") || parser.Has("import-cert")) {
+  PRAccessHow how = PR_ACCESS_READ_OK;
+  bool readOnly = true;
+  if (parser.Has("--create") || parser.Has("--import-cert")) {
     how = PR_ACCESS_WRITE_OK;
     readOnly = false;
-  } else {  // parser.Has("--list-certs")
-    how = PR_ACCESS_READ_OK;
-    readOnly = true;
   }
 
   std::string initDir(".");
   if (parser.Has("--path")) {
     initDir = parser.Get("--path");
-    if (PR_Access(initDir.c_str(), how) != PR_SUCCESS) {
-      std::cerr << "Directory '" << initDir
-                << "' does not exist or you don't have permissions!"
-                << std::endl;
-      return false;
-    }
+  }
+  if (PR_Access(initDir.c_str(), how) != PR_SUCCESS) {
+    std::cerr << "Directory '" << initDir
+              << "' does not exist or you don't have permissions!" << std::endl;
+    return false;
   }
 
   std::cout << "Using database directory: " << initDir << std::endl
@@ -243,14 +239,15 @@ bool DBTool::ImportCertificate(const ArgParser &parser) {
 
   std::vector<char> certData;
   if (derFilePath.empty()) {
-    std::cout << "No DER file path given, using stdin." << std::endl;
+    std::cout << "No Certificate file path given, using stdin." << std::endl;
     certData = ReadFromIstream(std::cin);
   } else {
     std::ifstream is(derFilePath, std::ifstream::binary);
     if (!is.good()) {
       std::cerr << "IO Error when opening " << derFilePath << std::endl;
-      std::cerr << "DER file does not exist or you don't have permissions."
-                << std::endl;
+      std::cerr
+          << "Certificate file does not exist or you don't have permissions."
+          << std::endl;
       return false;
     }
     certData = ReadFromIstream(is);
