@@ -233,7 +233,7 @@ bool DBTool::ImportCertificate(const ArgParser &parser) {
 
   ScopedPK11SlotInfo slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
   if (slot.get() == nullptr) {
-    std::cerr << "Error: Init PK11SlotInfo failed!\n";
+    std::cerr << "Error: Init PK11SlotInfo failed!" << std::endl;
     return false;
   }
 
@@ -277,5 +277,88 @@ bool DBTool::ImportCertificate(const ArgParser &parser) {
 
   std::cout << "Certificate import was successful!" << std::endl;
   // TODO show information about imported certificate
+  return true;
+}
+
+// TODO move this out in some utility module
+// TODO move static functions up in this file
+static bool itemIsPrintableASCII(ScopedSECItem const &item) {
+  std::string toTest((char *)item.get()->data);
+  if (toTest.find_first_not_of(" !\"#$%&\'()*+,-./"
+                               "0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]"
+                               "^_`abcdefghijklmnopqrstuvwxyz{|}~")) {
+    return false;
+  }
+  return true;
+}
+
+static const char *const keyTypeName[] = {"null", "rsa", "dsa", "fortezza",
+                                          "dh",   "kea", "ec"};
+
+static std::string stringToHex(const std::string &input) {
+  std::stringstream ss;
+  for (std::string::size_type i = 0; i < input.length(); i++) {
+    ss << std::hex << std::setfill('0') << std::setw(2) << std::uppercase
+       << (int)input[i];
+  }
+
+  return ss.str();
+}
+
+bool DBTool::ListKeys() {
+  ScopedPK11SlotInfo slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
+  if (slot.get() == nullptr) {
+    std::cerr << "Error: Init PK11SlotInfo failed!" << std::endl;
+    return false;
+  }
+
+  ScopedSECKEYPrivateKeyList list(PK11_ListPrivateKeysInSlot(slot.get()));
+  if (list.get() == nullptr) {
+    std::cerr << "Listing private keys failed!" << std::endl;
+    return false;
+  }
+
+  SECKEYPrivateKeyListNode *node;
+  int count = 0;
+  for (node = PRIVKEY_LIST_HEAD(list); !PRIVKEY_LIST_END(node, list);
+       node = PRIVKEY_LIST_NEXT(node)) {
+    char *_keyname = PK11_GetPrivateKeyNickname(node->key);
+    std::string keyName(_keyname == nullptr ? "(orphan)" : _keyname);
+
+    // FIXME see ListCertificates for details...
+    if (keyName == "(orphan)") {
+      ScopedCERTCertificate cert(PK11_GetCertFromPrivateKey(node->key));
+      if (cert.get() != nullptr) {
+        // TODO here use strlen instead of cert->nickname[0]
+        if (cert->nickname && cert->nickname[0]) {
+          keyName = std::string(cert->nickname);
+        } else if (cert->emailAddr && cert->emailAddr[0]) {
+          keyName = std::string(cert->emailAddr);
+        }
+      }
+      if (keyName == "(orphan)") {
+        std::cerr << "Warning: Current Key has no nickname!" << std::endl;
+      }
+    }
+
+    SECKEYPrivateKey *key = node->key;
+    ScopedSECItem secItem(PK11_GetLowLevelKeyIDForPrivateKey(key));
+    std::string keyData;
+    if (secItem.get() == nullptr) {
+      std::cerr << "Error: PK11_GetLowLevelKeyIDForPrivateKey failed!"
+                << std::endl;
+      continue;
+    } else if (itemIsPrintableASCII(secItem)) {
+      keyData = "'" + std::string((char *)secItem->data) + "'";
+    } else {
+      keyData = stringToHex(std::string((char *)secItem->data));
+    }
+
+    std::cout << "<" << count << ", name: " << keyName << "> "
+              << keyTypeName[key->keyType] << " " << keyData << "\n";
+
+    count++;
+  }
+
   return true;
 }
