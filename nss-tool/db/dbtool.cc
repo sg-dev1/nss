@@ -63,19 +63,44 @@ static std::vector<char> ReadFromIstream(std::istream &is) {
   return certData;
 }
 
+static bool ItemIsPrintableASCII(ScopedSECItem const &item) {
+  std::string toTest((char *)item.get()->data);
+  if (toTest.find_first_not_of(" !\"#$%&\'()*+,-./"
+                               "0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]"
+                               "^_`abcdefghijklmnopqrstuvwxyz{|}~")) {
+    return false;
+  }
+  return true;
+}
+
+static const char *const keyTypeName[] = {"null", "rsa", "dsa", "fortezza",
+                                          "dh",   "kea", "ec"};
+
+static std::string StringToHex(const std::string &input) {
+  std::stringstream ss;
+  for (std::string::size_type i = 0; i < input.length(); i++) {
+    ss << std::hex << std::setfill('0') << std::setw(2) << std::uppercase
+       << (int)input[i];
+  }
+
+  return ss.str();
+}
+
 void DBTool::Usage() {
   std::cerr << "Usage: nss db [--path <directory>]" << std::endl;
   std::cerr << "  --create" << std::endl;
   std::cerr << "  --list-certs" << std::endl;
   std::cerr << "  --import-cert [<path>] --name <name> [--trusts <trusts>]"
             << std::endl;
+  std::cerr << "  --list-keys" << std::endl;
 }
 
 bool DBTool::Run(const std::vector<std::string> &arguments) {
   ArgParser parser(arguments);
 
-  if (!parser.Has("--create") && !parser.Has("--list-certs") &&
-      !parser.Has("--import-cert")) {
+  if (((parser.Has("--create") ? 1 : 0) + (parser.Has("--list-certs") ? 1 : 0) +
+       (parser.Has("--import-cert") ? 1 : 0) +
+       (parser.Has("--list-keys") ? 1 : 0)) != 1) {
     return false;
   }
 
@@ -130,6 +155,8 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
     ret = ImportCertificate(parser);
   } else if (parser.Has("--create")) {
     std::cout << "DB files created successfully." << std::endl;
+  } else if (parser.Has("--list-keys")) {
+    ret = ListKeys();
   }
 
   // shutdown nss
@@ -280,31 +307,6 @@ bool DBTool::ImportCertificate(const ArgParser &parser) {
   return true;
 }
 
-// TODO move this out in some utility module
-// TODO move static functions up in this file
-static bool itemIsPrintableASCII(ScopedSECItem const &item) {
-  std::string toTest((char *)item.get()->data);
-  if (toTest.find_first_not_of(" !\"#$%&\'()*+,-./"
-                               "0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]"
-                               "^_`abcdefghijklmnopqrstuvwxyz{|}~")) {
-    return false;
-  }
-  return true;
-}
-
-static const char *const keyTypeName[] = {"null", "rsa", "dsa", "fortezza",
-                                          "dh",   "kea", "ec"};
-
-static std::string stringToHex(const std::string &input) {
-  std::stringstream ss;
-  for (std::string::size_type i = 0; i < input.length(); i++) {
-    ss << std::hex << std::setfill('0') << std::setw(2) << std::uppercase
-       << (int)input[i];
-  }
-
-  return ss.str();
-}
-
 bool DBTool::ListKeys() {
   ScopedPK11SlotInfo slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
   if (slot.get() == nullptr) {
@@ -318,22 +320,24 @@ bool DBTool::ListKeys() {
     return false;
   }
 
+  std::cout << std::setw(20) << std::left << "<key#, key name>" << std::setw(20)
+            << std::left << " key type "
+            << " key data " << std::endl;
+
   SECKEYPrivateKeyListNode *node;
   int count = 0;
   for (node = PRIVKEY_LIST_HEAD(list); !PRIVKEY_LIST_END(node, list);
        node = PRIVKEY_LIST_NEXT(node)) {
-    char *_keyname = PK11_GetPrivateKeyNickname(node->key);
-    std::string keyName(_keyname == nullptr ? "(orphan)" : _keyname);
+    char *keyName_ = PK11_GetPrivateKeyNickname(node->key);
+    std::string keyName(keyName_ == nullptr ? "(orphan)" : keyName_);
 
-    // FIXME see ListCertificates for details...
     if (keyName == "(orphan)") {
       ScopedCERTCertificate cert(PK11_GetCertFromPrivateKey(node->key));
       if (cert.get() != nullptr) {
-        // TODO here use strlen instead of cert->nickname[0]
-        if (cert->nickname && cert->nickname[0]) {
-          keyName = std::string(cert->nickname);
-        } else if (cert->emailAddr && cert->emailAddr[0]) {
-          keyName = std::string(cert->emailAddr);
+        if (cert->nickname && strlen(cert->nickname) > 0) {
+          keyName = cert->nickname;
+        } else if (cert->emailAddr && strlen(cert->emailAddr) > 0) {
+          keyName = cert->emailAddr;
         }
       }
       if (keyName == "(orphan)") {
@@ -348,14 +352,16 @@ bool DBTool::ListKeys() {
       std::cerr << "Error: PK11_GetLowLevelKeyIDForPrivateKey failed!"
                 << std::endl;
       continue;
-    } else if (itemIsPrintableASCII(secItem)) {
-      keyData = "'" + std::string((char *)secItem->data) + "'";
+    } else if (ItemIsPrintableASCII(secItem)) {
+      keyData =
+          "'" + std::string(reinterpret_cast<char *>(secItem->data)) + "'";
     } else {
-      keyData = stringToHex(std::string((char *)secItem->data));
+      keyData = StringToHex(reinterpret_cast<char *>(secItem->data));
     }
 
-    std::cout << "<" << count << ", name: " << keyName << "> "
-              << keyTypeName[key->keyType] << " " << keyData << "\n";
+    std::cout << std::setw(20) << std::left << "<" << count
+              << ", name: " << keyName << "> " << std::setw(20) << std::left
+              << keyTypeName[key->keyType] << " " << keyData << std::endl;
 
     count++;
   }
