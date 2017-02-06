@@ -18,6 +18,7 @@
 #include <cert.h>
 #include <certdb.h>
 #include <nss.h>
+#include <pk11pub.h>
 #include <prerror.h>
 #include <prio.h>
 
@@ -83,6 +84,7 @@ void DBTool::Usage() {
   std::cerr << "  --import-cert [<path>] --name <name> [--trusts <trusts>]"
             << std::endl;
   std::cerr << "  --list-keys" << std::endl;
+  std::cerr << "  --import-key [<path>]" << std::endl;
 }
 
 bool DBTool::Run(const std::vector<std::string> &arguments) {
@@ -363,6 +365,102 @@ bool DBTool::ListKeys() {
 
   if (count == 0) {
     std::cout << "No keys found." << std::endl;
+  }
+
+  return true;
+}
+
+bool DBTool::ImportKeys(const ArgParser &parser) {
+  std::string derFilePath = parser.Get("--import-key");
+
+  std::vector<char> keyData;
+  if (derFilePath.empty()) {
+    // stdin
+    // for testing use constant values
+    std::cout << "No DER file path given, using stdin." << std::endl;
+    keyData = ReadFromIstream(std::cin);
+  } else {
+    std::ifstream is(derFilePath, std::ifstream::binary);
+    if (!is.good()) {
+      std::cerr << "IO Error when opening " << derFilePath << std::endl;
+      std::cerr << "DER file does not exist or you don't have permissions."
+                << std::endl;
+      return false;
+    }
+    keyData = ReadFromIstream(is);
+  }
+
+  if (!ImportPrivateKey(keyData)) {
+    return false;
+  }
+
+  std::cout << "Importing private/public key pair was successful." << std::endl;
+  return true;
+}
+
+#define BASE64_ENCODED_SUBJECTPUBLICKEYINFO                       \
+  "MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAL3F6TIc3JEYsugo+a2fPU3W+Epv/" \
+  "FeIX21DC86WYnpFtW4srFtz2oNUzyLUzDHZdb+k//8dcT3IAOzUUi3R2eMCAwEAAQ=="
+
+#define BASE64_ENCODED_PRIVATEKEYINFO                                          \
+  "MIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAvcXpMhzckRiy6Cj5rZ89Tdb4Sm" \
+  "/8V4hfbUMLzpZiekW1biysW3Pag1TPItTMMdl1v6T//"                                \
+  "x1xPcgA7NRSLdHZ4wIDAQABAkEAjh8+4qncwcmGivnM6ytbpQT+k/"                      \
+  "jEOeXG2bQhjojvnXN3FazGCEFXvpuIBcJVfaIJS9YBCMOzzrAtO0+"                      \
+  "k2hWnOQIhAOC4NVbo8FQhZS4yXM1M86kMl47FA9ui//"                                \
+  "OUfbhlAdw1AiEA2DBmIXnsboKB+"                                                \
+  "OHver69p0gNeWlvcJc9bjDVfdLVsLcCIQCPtV3vGYJv2vdwxqZQaHC+"                    \
+  "YB4gIGAqOqBCbmjD3lyFLQIgA+"                                                 \
+  "VTYdUNoqwtZWvE4gRf7IzK2V5CCNhg3gR5RGwxN58CIGCcafoRrUKsM66ISg0ITI04G9V/"     \
+  "w+wMx91wjEEB+QBz"
+
+#if 0
+static std::tuple<std::vector<char>, std::vector<char>>
+GetPubPrivKeyDataFromString() {
+  const char *pubkstr = BASE64_ENCODED_SUBJECTPUBLICKEYINFO;
+  const char *pvtkstr = BASE64_ENCODED_PRIVATEKEYINFO;
+
+  std::tuple<std::vector<char>, std::vector<char>> result;
+  SECItem der;
+  SECStatus rv = ATOB_ConvertAsciiToItem(&der, pubkstr);
+  if (rv != SECSuccess) {
+    std::cerr << "Could not convert Ascii to secitem." << std::endl;
+    return result;
+  }
+  std::vector<char> pubKeyData(reinterpret_cast<char *>(der.data));
+  SECITEM_FreeItem(&der, PR_FALSE);
+
+  /*
+  SECStatus rv = ATOB_ConvertAsciiToItem(&der, pvtkstr);
+  if (rv != SECSuccess) {
+    std::cerr << "Could not convert Ascii to secitem." << std::endl;
+    return result;
+  }
+  std::vector<char> privKeyData(reinterpret_cast<char *>(der.data));
+  SECITEM_FreeItem(&der, PR_FALSE);
+  */
+
+  return std::make_tuple(pubKeyData, privKeyData);
+}
+#endif
+
+bool DBTool::ImportPrivateKey(std::vector<char> keyData) {
+  ScopedPK11SlotInfo slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
+  if (slot.get() == nullptr) {
+    std::cerr << "Error: Init PK11SlotInfo failed!" << std::endl;
+    return false;
+  }
+
+  SECItem pkcs8Item = {siBuffer,
+                       reinterpret_cast<unsigned char *>(keyData.data()),
+                       static_cast<unsigned int>(keyData.size())};
+
+  SECStatus rv = PK11_ImportDERPrivateKeyInfo(
+      slot.get(), &pkcs8Item, nullptr /*SECItem nickname*/,
+      nullptr /*SECItem publicKey*/, false, false, KU_ALL, nullptr);
+  if (rv != SECSuccess) {
+    std::cerr << "Error: Import DER Private Key failed." << std::endl;
+    return false;
   }
 
   return true;
