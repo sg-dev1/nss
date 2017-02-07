@@ -21,8 +21,7 @@ class DBTool {
   bool ImportCertificate(const ArgParser& parser);
   bool ListKeys();
 
-  bool ImportKeys(const ArgParser& parser);
-  bool ImportPrivateKey(std::vector<char> keyData);
+  bool ImportKey(const ArgParser& parser);
 };
 
 #endif  // dbtool_h__

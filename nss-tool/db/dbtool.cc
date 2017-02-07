@@ -23,7 +23,8 @@
 #include <prio.h>
 
 const std::vector<std::string> kCommandArgs({"--create", "--list-certs",
-                                             "--import-cert", "--list-keys"});
+                                             "--import-cert", "--list-keys",
+                                             "--import-key"});
 
 static bool HasSingleCommandArgument(const ArgParser &parser) {
   auto pred = [&](const std::string &cmd) { return parser.Has(cmd); };
@@ -77,6 +78,25 @@ static std::vector<char> ReadFromIstream(std::istream &is) {
 static const char *const keyTypeName[] = {"null", "rsa", "dsa", "fortezza",
                                           "dh",   "kea", "ec"};
 
+static std::vector<char> LoadDataInMemory(std::string &dataPath) {
+  std::vector<char> data;
+  if (dataPath.empty()) {
+    std::cout << "No input file path given, using stdin." << std::endl;
+    data = ReadFromIstream(std::cin);
+  } else {
+    std::ifstream is(dataPath, std::ifstream::binary);
+    if (is.good()) {
+      data = ReadFromIstream(is);
+    } else {
+      std::cerr << "IO Error when opening " << dataPath << std::endl;
+      std::cerr << "Input file does not exist or you don't have permissions."
+                << std::endl;
+    }
+  }
+
+  return data;
+}
+
 void DBTool::Usage() {
   std::cerr << "Usage: nss db [--path <directory>]" << std::endl;
   std::cerr << "  --create" << std::endl;
@@ -84,7 +104,10 @@ void DBTool::Usage() {
   std::cerr << "  --import-cert [<path>] --name <name> [--trusts <trusts>]"
             << std::endl;
   std::cerr << "  --list-keys" << std::endl;
-  std::cerr << "  --import-key [<path>]" << std::endl;
+  // TODO say where public key is need and where not (e.g. not needed for RSA,
+  // ECC? - import needed for DSA, DH)
+  std::cerr << "  --import-key [<path> [-- name <name> [--pub-key <pub-key>]]]"
+            << std::endl;
 }
 
 bool DBTool::Run(const std::vector<std::string> &arguments) {
@@ -97,7 +120,8 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
 
   PRAccessHow how = PR_ACCESS_READ_OK;
   bool readOnly = true;
-  if (parser.Has("--create") || parser.Has("--import-cert")) {
+  if (parser.Has("--create") || parser.Has("--import-cert") ||
+      parser.Has("--import-key")) {
     how = PR_ACCESS_WRITE_OK;
     readOnly = false;
   }
@@ -151,6 +175,8 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
     }
   } else if (parser.Has("--list-keys")) {
     ret = ListKeys();
+  } else if (parser.Has("--import-key")) {
+    ret = ImportKey(parser);
   }
 
   // shutdown nss
@@ -370,98 +396,60 @@ bool DBTool::ListKeys() {
   return true;
 }
 
-bool DBTool::ImportKeys(const ArgParser &parser) {
-  std::string derFilePath = parser.Get("--import-key");
-
-  std::vector<char> keyData;
-  if (derFilePath.empty()) {
-    // stdin
-    // for testing use constant values
-    std::cout << "No DER file path given, using stdin." << std::endl;
-    keyData = ReadFromIstream(std::cin);
-  } else {
-    std::ifstream is(derFilePath, std::ifstream::binary);
-    if (!is.good()) {
-      std::cerr << "IO Error when opening " << derFilePath << std::endl;
-      std::cerr << "DER file does not exist or you don't have permissions."
-                << std::endl;
-      return false;
-    }
-    keyData = ReadFromIstream(is);
+bool DBTool::ImportKey(const ArgParser &parser) {
+  std::string privKeyFilePath = parser.Get("--import-key");
+  std::string name;
+  if (parser.Has("--name")) {
+    name = parser.Get("--name");
+  }
+  std::string pubKeyFilePath;
+  if (parser.Has("--pub-key")) {
+    pubKeyFilePath = parser.Get("--pub-key");
   }
 
-  if (!ImportPrivateKey(keyData)) {
-    return false;
-  }
-
-  std::cout << "Importing private/public key pair was successful." << std::endl;
-  return true;
-}
-
-#define BASE64_ENCODED_SUBJECTPUBLICKEYINFO                       \
-  "MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAL3F6TIc3JEYsugo+a2fPU3W+Epv/" \
-  "FeIX21DC86WYnpFtW4srFtz2oNUzyLUzDHZdb+k//8dcT3IAOzUUi3R2eMCAwEAAQ=="
-
-#define BASE64_ENCODED_PRIVATEKEYINFO                                          \
-  "MIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAvcXpMhzckRiy6Cj5rZ89Tdb4Sm" \
-  "/8V4hfbUMLzpZiekW1biysW3Pag1TPItTMMdl1v6T//"                                \
-  "x1xPcgA7NRSLdHZ4wIDAQABAkEAjh8+4qncwcmGivnM6ytbpQT+k/"                      \
-  "jEOeXG2bQhjojvnXN3FazGCEFXvpuIBcJVfaIJS9YBCMOzzrAtO0+"                      \
-  "k2hWnOQIhAOC4NVbo8FQhZS4yXM1M86kMl47FA9ui//"                                \
-  "OUfbhlAdw1AiEA2DBmIXnsboKB+"                                                \
-  "OHver69p0gNeWlvcJc9bjDVfdLVsLcCIQCPtV3vGYJv2vdwxqZQaHC+"                    \
-  "YB4gIGAqOqBCbmjD3lyFLQIgA+"                                                 \
-  "VTYdUNoqwtZWvE4gRf7IzK2V5CCNhg3gR5RGwxN58CIGCcafoRrUKsM66ISg0ITI04G9V/"     \
-  "w+wMx91wjEEB+QBz"
-
-#if 0
-static std::tuple<std::vector<char>, std::vector<char>>
-GetPubPrivKeyDataFromString() {
-  const char *pubkstr = BASE64_ENCODED_SUBJECTPUBLICKEYINFO;
-  const char *pvtkstr = BASE64_ENCODED_PRIVATEKEYINFO;
-
-  std::tuple<std::vector<char>, std::vector<char>> result;
-  SECItem der;
-  SECStatus rv = ATOB_ConvertAsciiToItem(&der, pubkstr);
-  if (rv != SECSuccess) {
-    std::cerr << "Could not convert Ascii to secitem." << std::endl;
-    return result;
-  }
-  std::vector<char> pubKeyData(reinterpret_cast<char *>(der.data));
-  SECITEM_FreeItem(&der, PR_FALSE);
-
-  /*
-  SECStatus rv = ATOB_ConvertAsciiToItem(&der, pvtkstr);
-  if (rv != SECSuccess) {
-    std::cerr << "Could not convert Ascii to secitem." << std::endl;
-    return result;
-  }
-  std::vector<char> privKeyData(reinterpret_cast<char *>(der.data));
-  SECITEM_FreeItem(&der, PR_FALSE);
-  */
-
-  return std::make_tuple(pubKeyData, privKeyData);
-}
-#endif
-
-bool DBTool::ImportPrivateKey(std::vector<char> keyData) {
   ScopedPK11SlotInfo slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
   if (slot.get() == nullptr) {
     std::cerr << "Error: Init PK11SlotInfo failed!" << std::endl;
     return false;
   }
 
-  SECItem pkcs8Item = {siBuffer,
-                       reinterpret_cast<unsigned char *>(keyData.data()),
-                       static_cast<unsigned int>(keyData.size())};
+  std::vector<char> privKeyData = LoadDataInMemory(privKeyFilePath);
+  if (privKeyData.empty()) {
+    return false;
+  }
+  SECItem pkcs8PrivKeyItem = {
+      siBuffer, reinterpret_cast<unsigned char *>(privKeyData.data()),
+      static_cast<unsigned int>(privKeyData.size())};
+
+  SECItem pkcs8PubKeyItem;
+  pkcs8PubKeyItem = {siBuffer, nullptr, 0};
+  if (!pubKeyFilePath.empty()) {
+    std::vector<char> pubKeyData = LoadDataInMemory(pubKeyFilePath);
+    if (pubKeyData.empty()) {
+      return false;
+    }
+    pkcs8PubKeyItem.data = reinterpret_cast<unsigned char *>(pubKeyData.data());
+    pkcs8PubKeyItem.len = static_cast<unsigned int>(pubKeyData.size());
+  }
+
+  SECItem nickname = {siBuffer, nullptr, 0};
+  if (!name.empty()) {
+    nickname.data = const_cast<unsigned char *>(
+        reinterpret_cast<const unsigned char *>(name.c_str()));
+    nickname.len = static_cast<unsigned int>(name.size());
+  }
 
   SECStatus rv = PK11_ImportDERPrivateKeyInfo(
-      slot.get(), &pkcs8Item, nullptr /*SECItem nickname*/,
-      nullptr /*SECItem publicKey*/, false, false, KU_ALL, nullptr);
+      slot.get(), &pkcs8PrivKeyItem,
+      nickname.data == nullptr ? nullptr : &nickname,
+      pkcs8PubKeyItem.data == nullptr ? nullptr : &pkcs8PubKeyItem,
+      false /*isPerm*/, false /*isPrivate*/, KU_ALL, nullptr);
   if (rv != SECSuccess) {
-    std::cerr << "Error: Import DER Private Key failed." << std::endl;
+    std::cerr << "Error: Import DER Private Key failed with error "
+              << PR_GetError() << std::endl;
     return false;
   }
 
+  std::cout << "Importing key was successful." << std::endl;
   return true;
 }
