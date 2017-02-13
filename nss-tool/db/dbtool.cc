@@ -63,21 +63,11 @@ static std::vector<char> ReadFromIstream(std::istream &is) {
   return certData;
 }
 
-static bool ItemIsPrintableASCII(ScopedSECItem const &item) {
-  std::string toTest((char *)item.get()->data);
-  if (toTest.find_first_not_of(" !\"#$%&\'()*+,-./"
-                               "0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]"
-                               "^_`abcdefghijklmnopqrstuvwxyz{|}~")) {
-    return false;
-  }
-  return true;
-}
-
 static const char *const keyTypeName[] = {"null", "rsa", "dsa", "fortezza",
                                           "dh",   "kea", "ec"};
 
 static std::string StringToHex(const std::string &input) {
-  std::stringstream ss;
+  std::stringstream ss("0x");
   for (std::string::size_type i = 0; i < input.length(); i++) {
     ss << std::hex << std::setfill('0') << std::setw(2) << std::uppercase
        << (int)input[i];
@@ -98,6 +88,7 @@ void DBTool::Usage() {
 bool DBTool::Run(const std::vector<std::string> &arguments) {
   ArgParser parser(arguments);
 
+  // xor to assert that exactly one command is given
   if (((parser.Has("--create") ? 1 : 0) + (parser.Has("--list-certs") ? 1 : 0) +
        (parser.Has("--import-cert") ? 1 : 0) +
        (parser.Has("--list-keys") ? 1 : 0)) != 1) {
@@ -322,16 +313,16 @@ bool DBTool::ListKeys() {
 
   std::cout << std::setw(20) << std::left << "<key#, key name>" << std::setw(20)
             << std::left << " key type "
-            << " key data " << std::endl;
+            << " key id " << std::endl;
 
   SECKEYPrivateKeyListNode *node;
   int count = 0;
   for (node = PRIVKEY_LIST_HEAD(list); !PRIVKEY_LIST_END(node, list);
        node = PRIVKEY_LIST_NEXT(node)) {
-    char *keyName_ = PK11_GetPrivateKeyNickname(node->key);
-    std::string keyName(keyName_ == nullptr ? "(orphan)" : keyName_);
+    char *keyNameRaw = PK11_GetPrivateKeyNickname(node->key);
+    std::string keyName(keyNameRaw == nullptr ? "" : keyNameRaw);
 
-    if (keyName == "(orphan)") {
+    if (keyName.empty()) {
       ScopedCERTCertificate cert(PK11_GetCertFromPrivateKey(node->key));
       if (cert.get() != nullptr) {
         if (cert->nickname && strlen(cert->nickname) > 0) {
@@ -340,30 +331,25 @@ bool DBTool::ListKeys() {
           keyName = cert->emailAddr;
         }
       }
-      if (keyName == "(orphan)") {
-        std::cerr << "Warning: Current Key has no nickname!" << std::endl;
+      if (keyName.empty()) {
+        keyName = "(none)";  // default value
       }
     }
 
     SECKEYPrivateKey *key = node->key;
-    ScopedSECItem secItem(PK11_GetLowLevelKeyIDForPrivateKey(key));
-    std::string keyData;
-    if (secItem.get() == nullptr) {
+    ScopedSECItem keyIDItem(PK11_GetLowLevelKeyIDForPrivateKey(key));
+    if (keyIDItem.get() == nullptr) {
       std::cerr << "Error: PK11_GetLowLevelKeyIDForPrivateKey failed!"
                 << std::endl;
       continue;
-    } else if (ItemIsPrintableASCII(secItem)) {
-      keyData =
-          "'" + std::string(reinterpret_cast<char *>(secItem->data)) + "'";
-    } else {
-      keyData = StringToHex(reinterpret_cast<char *>(secItem->data));
     }
 
-    std::cout << std::setw(20) << std::left << "<" << count
-              << ", name: " << keyName << "> " << std::setw(20) << std::left
-              << keyTypeName[key->keyType] << " " << keyData << std::endl;
+    std::string keyID = StringToHex(
+        std::string(reinterpret_cast<char *>(keyIDItem->data), keyIDItem->len));
 
-    count++;
+    std::cout << std::setw(20) << std::left << "<" << count++
+              << ", name: " << keyName << "> " << std::setw(20) << std::left
+              << keyTypeName[key->keyType] << " " << keyID << std::endl;
   }
 
   return true;
