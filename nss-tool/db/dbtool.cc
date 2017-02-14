@@ -135,10 +135,10 @@ static const char *const keyTypeName[] = {"null", "rsa", "dsa", "fortezza",
                                           "dh",   "kea", "ec"};
 
 static std::string StringToHex(const std::string &input) {
-  std::stringstream ss("0x");
+  std::stringstream ss;
+  ss << "0x";
   for (std::string::size_type i = 0; i < input.length(); i++) {
-    ss << std::hex << std::setfill('0') << std::setw(2) << std::uppercase
-       << (int)input[i];
+    ss << std::hex << std::setfill('0') << std::setw(2) << (int)input[i];
   }
 
   return ss.str();
@@ -385,21 +385,19 @@ bool DBTool::ListKeys() {
     SECStatus rv = PK11_Authenticate(slot.get(), true /*loadCerts*/, &pwData);
     if (rv != SECSuccess) {
       std::cerr << "Could not authenticate to token "
-                << PK11_GetTokenName(slot.get()) << ". Failed with code "
-                << PR_GetError() << std::endl;
+                << PK11_GetTokenName(slot.get()) << ". Failed with error "
+                << PR_ErrorToName(PR_GetError()) << std::endl;
       return false;
     }
+    std::cout << std::endl;
   }
 
   ScopedSECKEYPrivateKeyList list(PK11_ListPrivateKeysInSlot(slot.get()));
   if (list.get() == nullptr) {
-    std::cerr << "Listing private keys failed!" << std::endl;
+    std::cerr << "Listing private keys failed with error "
+              << PR_ErrorToName(PR_GetError()) << std::endl;
     return false;
   }
-
-  std::cout << std::setw(20) << std::left << "<key#, key name>" << std::setw(20)
-            << std::left << " key type "
-            << " key id " << std::endl;
 
   SECKEYPrivateKeyListNode *node;
   int count = 0;
@@ -433,9 +431,21 @@ bool DBTool::ListKeys() {
     std::string keyID = StringToHex(
         std::string(reinterpret_cast<char *>(keyIDItem->data), keyIDItem->len));
 
-    std::cout << std::setw(20) << std::left << "<" << count++
-              << ", name: " << keyName << "> " << std::setw(20) << std::left
-              << keyTypeName[key->keyType] << " " << keyID << std::endl;
+    if (count == 0) {
+      // print header
+      std::cout << std::left << std::setw(20) << "<key#, key name>"
+                << std::setw(20) << "key type"
+                << "key id" << std::endl;
+    }
+
+    std::stringstream leftElem;
+    leftElem << "<" << count++ << ", " << keyName << ">";
+    std::cout << std::left << std::setw(20) << leftElem.str() << std::setw(20)
+              << keyTypeName[key->keyType] << keyID << std::endl;
+  }
+
+  if (count == 0) {
+    std::cout << "No keys found." << std::endl;
   }
 
   return true;
