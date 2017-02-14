@@ -17,6 +17,7 @@
 #include <cert.h>
 #include <certdb.h>
 #include <nss.h>
+#include <prerror.h>
 #include <prio.h>
 
 static std::string PrintFlags(unsigned int flags) {
@@ -61,6 +62,73 @@ static std::vector<char> ReadFromIstream(std::istream &is) {
   }
 
   return certData;
+}
+
+static bool InitSlotPassword(void) {
+  ScopedPK11SlotInfo slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
+  if (slot.get() == nullptr) {
+    std::cerr << "Error: Init PK11SlotInfo failed!" << std::endl;
+    return false;
+  }
+
+  std::cout << "Enter a password which will be used to encrypt your keys."
+            << std::endl
+            << std::endl;
+  std::string pw, pwComp;
+
+  while (true) {
+    std::cout << "Enter new password: " << std::endl;
+    std::getline(std::cin, pw);  // TODO disable echoing of password to stdout
+    std::cout << "Re-enter password: " << std::endl;
+    std::getline(std::cin, pwComp);  // TODO disable echoing of pw to stdout
+
+    if (pw == pwComp) {
+      break;
+    }
+
+    std::cerr << "Passwords do not match. Try again." << std::endl;
+  }
+
+  SECStatus rv = PK11_InitPin(slot.get(), nullptr, pw.c_str());
+  if (rv != SECSuccess) {
+    std::cerr << "Init db password failed." << std::endl;
+    return false;
+  }
+
+  return true;
+}
+
+enum PwDataType { PW_NONE = 0, PW_FROMFILE = 1, PW_PLAINTEXT = 2 };
+typedef struct {
+  PwDataType source;
+  char *data;
+} PwData;
+
+static char *GetModulePassword(PK11SlotInfo *slot, int retry, void *arg) {
+  PwData *pwData = reinterpret_cast<PwData *>(arg);
+
+  if (pwData == nullptr) {
+    return nullptr;
+  }
+
+  if (retry > 0) {
+    std::cerr << "Incorrect password/PIN entered." << std::endl;
+    return nullptr;
+  }
+
+  switch (pwData->source) {
+    case PW_NONE:
+    case PW_FROMFILE:
+      std::cerr << "Password input method not supported." << std::endl;
+      return nullptr;
+    case PW_PLAINTEXT:
+      return PL_strdup(pwData->data);
+    default:
+      break;
+  }
+
+  std::cerr << "Password check failed:  No password found." << std::endl;
+  return nullptr;
 }
 
 static const char *const keyTypeName[] = {"null", "rsa", "dsa", "fortezza",
@@ -145,7 +213,10 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
   } else if (parser.Has("--import-cert")) {
     ret = ImportCertificate(parser);
   } else if (parser.Has("--create")) {
-    std::cout << "DB files created successfully." << std::endl;
+    ret = InitSlotPassword();
+    if (ret) {
+      std::cout << "DB files created successfully." << std::endl;
+    }
   } else if (parser.Has("--list-keys")) {
     ret = ListKeys();
   }
@@ -305,6 +376,21 @@ bool DBTool::ListKeys() {
     return false;
   }
 
+  PK11_SetPasswordFunc(&GetModulePassword);
+  if (PK11_NeedLogin(slot.get())) {
+    std::string pw;
+    std::cout << "Enter your password: " << std::endl;
+    std::getline(std::cin, pw);  // TODO disable echoing of password to stdout
+    PwData pwData = {PW_PLAINTEXT, const_cast<char *>(pw.c_str())};
+    SECStatus rv = PK11_Authenticate(slot.get(), true /*loadCerts*/, &pwData);
+    if (rv != SECSuccess) {
+      std::cerr << "Could not authenticate to token "
+                << PK11_GetTokenName(slot.get()) << ". Failed with code "
+                << PR_GetError() << std::endl;
+      return false;
+    }
+  }
+
   ScopedSECKEYPrivateKeyList list(PK11_ListPrivateKeysInSlot(slot.get()));
   if (list.get() == nullptr) {
     std::cerr << "Listing private keys failed!" << std::endl;
@@ -317,8 +403,8 @@ bool DBTool::ListKeys() {
 
   SECKEYPrivateKeyListNode *node;
   int count = 0;
-  for (node = PRIVKEY_LIST_HEAD(list); !PRIVKEY_LIST_END(node, list);
-       node = PRIVKEY_LIST_NEXT(node)) {
+  for (node = PRIVKEY_LIST_HEAD(list.get());
+       !PRIVKEY_LIST_END(node, list.get()); node = PRIVKEY_LIST_NEXT(node)) {
     char *keyNameRaw = PK11_GetPrivateKeyNickname(node->key);
     std::string keyName(keyNameRaw == nullptr ? "" : keyNameRaw);
 
