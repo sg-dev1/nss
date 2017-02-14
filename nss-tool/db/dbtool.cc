@@ -97,6 +97,39 @@ static std::vector<char> LoadDataInMemory(std::string &dataPath) {
   return data;
 }
 
+enum PwDataType { PW_NONE = 0, PW_FROMFILE = 1, PW_PLAINTEXT = 2 };
+typedef struct {
+  PwDataType source;
+  char *data;
+} PwData;
+
+static char *GetModulePassword(PK11SlotInfo *slot, int retry, void *arg) {
+  PwData *pwData = reinterpret_cast<PwData *>(arg);
+
+  if (pwData == nullptr) {
+    return nullptr;
+  }
+
+  if (retry > 0) {
+    std::cerr << "Incorrect password/PIN entered." << std::endl;
+    return nullptr;
+  }
+
+  switch (pwData->source) {
+    case PW_NONE:
+    case PW_FROMFILE:
+      std::cerr << "Password input method not supported." << std::endl;
+      return nullptr;
+    case PW_PLAINTEXT:
+      return PL_strdup(pwData->data);
+    default:
+      break;
+  }
+
+  std::cerr << "Password check failed:  No password found." << std::endl;
+  return nullptr;
+}
+
 void DBTool::Usage() {
   std::cerr << "Usage: nss db [--path <directory>]" << std::endl;
   std::cerr << "  --create" << std::endl;
@@ -411,6 +444,21 @@ bool DBTool::ImportKey(const ArgParser &parser) {
   if (slot.get() == nullptr) {
     std::cerr << "Error: Init PK11SlotInfo failed!" << std::endl;
     return false;
+  }
+
+  PK11_SetPasswordFunc(&GetModulePassword);
+  if (PK11_NeedLogin(slot.get())) {
+    std::string pw;
+    std::cout << "Enter your password: " << std::endl;
+    std::getline(std::cin, pw);  // TODO disable echoing of password to stdout
+    PwData pwData = {PW_PLAINTEXT, const_cast<char *>(pw.c_str())};
+    SECStatus rv = PK11_Authenticate(slot.get(), true /*loadCerts*/, &pwData);
+    if (rv != SECSuccess) {
+      std::cerr << "Could not authenticate to token "
+                << PK11_GetTokenName(slot.get()) << ". Failed with code "
+                << PR_GetError() << std::endl;
+      return false;
+    }
   }
 
   std::vector<char> privKeyData = LoadDataInMemory(privKeyFilePath);
