@@ -5,6 +5,7 @@
 #include "dbtool.h"
 #include "argparse.h"
 #include "scoped_ptrs.h"
+#include "util.h"
 
 #include <dirent.h>
 #include <fstream>
@@ -64,81 +65,15 @@ static std::vector<char> ReadFromIstream(std::istream &is) {
   return certData;
 }
 
-static bool InitSlotPassword(void) {
-  ScopedPK11SlotInfo slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
-  if (slot.get() == nullptr) {
-    std::cerr << "Error: Init PK11SlotInfo failed!" << std::endl;
-    return false;
-  }
-
-  std::cout << "Enter a password which will be used to encrypt your keys."
-            << std::endl
-            << std::endl;
-  std::string pw, pwComp;
-
-  while (true) {
-    std::cout << "Enter new password: " << std::endl;
-    std::getline(std::cin, pw);  // TODO disable echoing of password to stdout
-    std::cout << "Re-enter password: " << std::endl;
-    std::getline(std::cin, pwComp);  // TODO disable echoing of pw to stdout
-
-    if (pw == pwComp) {
-      break;
-    }
-
-    std::cerr << "Passwords do not match. Try again." << std::endl;
-  }
-
-  SECStatus rv = PK11_InitPin(slot.get(), nullptr, pw.c_str());
-  if (rv != SECSuccess) {
-    std::cerr << "Init db password failed." << std::endl;
-    return false;
-  }
-
-  return true;
-}
-
-enum PwDataType { PW_NONE = 0, PW_FROMFILE = 1, PW_PLAINTEXT = 2 };
-typedef struct {
-  PwDataType source;
-  char *data;
-} PwData;
-
-static char *GetModulePassword(PK11SlotInfo *slot, int retry, void *arg) {
-  PwData *pwData = reinterpret_cast<PwData *>(arg);
-
-  if (pwData == nullptr) {
-    return nullptr;
-  }
-
-  if (retry > 0) {
-    std::cerr << "Incorrect password/PIN entered." << std::endl;
-    return nullptr;
-  }
-
-  switch (pwData->source) {
-    case PW_NONE:
-    case PW_FROMFILE:
-      std::cerr << "Password input method not supported." << std::endl;
-      return nullptr;
-    case PW_PLAINTEXT:
-      return PL_strdup(pwData->data);
-    default:
-      break;
-  }
-
-  std::cerr << "Password check failed:  No password found." << std::endl;
-  return nullptr;
-}
-
 static const char *const keyTypeName[] = {"null", "rsa", "dsa", "fortezza",
                                           "dh",   "kea", "ec"};
 
-static std::string StringToHex(const std::string &input) {
+static std::string StringToHex(const ScopedSECItem &input) {
   std::stringstream ss;
   ss << "0x";
-  for (std::string::size_type i = 0; i < input.length(); i++) {
-    ss << std::hex << std::setfill('0') << std::setw(2) << (int)input[i];
+  for (size_t i = 0; i < input->len; i++) {
+    ss << std::hex << std::setfill('0') << std::setw(2)
+       << static_cast<int>(input->data[i]);
   }
 
   return ss.str();
@@ -157,11 +92,14 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
   ArgParser parser(arguments);
 
   // xor to assert that exactly one command is given
-  if (((parser.Has("--create") ? 1 : 0) + (parser.Has("--list-certs") ? 1 : 0) +
+  // clang-format off
+  if (((parser.Has("--create") ? 1 : 0) +
+       (parser.Has("--list-certs") ? 1 : 0) +
        (parser.Has("--import-cert") ? 1 : 0) +
        (parser.Has("--list-keys") ? 1 : 0)) != 1) {
     return false;
   }
+  // clang-format on
 
   PRAccessHow how = PR_ACCESS_READ_OK;
   bool readOnly = true;
@@ -376,20 +314,8 @@ bool DBTool::ListKeys() {
     return false;
   }
 
-  PK11_SetPasswordFunc(&GetModulePassword);
-  if (PK11_NeedLogin(slot.get())) {
-    std::string pw;
-    std::cout << "Enter your password: " << std::endl;
-    std::getline(std::cin, pw);  // TODO disable echoing of password to stdout
-    PwData pwData = {PW_PLAINTEXT, const_cast<char *>(pw.c_str())};
-    SECStatus rv = PK11_Authenticate(slot.get(), true /*loadCerts*/, &pwData);
-    if (rv != SECSuccess) {
-      std::cerr << "Could not authenticate to token "
-                << PK11_GetTokenName(slot.get()) << ". Failed with error "
-                << PR_ErrorToName(PR_GetError()) << std::endl;
-      return false;
-    }
-    std::cout << std::endl;
+  if (!DBLoginIfNeeded(slot)) {
+    return false;
   }
 
   ScopedSECKEYPrivateKeyList list(PK11_ListPrivateKeysInSlot(slot.get()));
@@ -404,11 +330,11 @@ bool DBTool::ListKeys() {
   for (node = PRIVKEY_LIST_HEAD(list.get());
        !PRIVKEY_LIST_END(node, list.get()); node = PRIVKEY_LIST_NEXT(node)) {
     char *keyNameRaw = PK11_GetPrivateKeyNickname(node->key);
-    std::string keyName(keyNameRaw == nullptr ? "" : keyNameRaw);
+    std::string keyName(keyNameRaw ? "" : keyNameRaw);
 
     if (keyName.empty()) {
       ScopedCERTCertificate cert(PK11_GetCertFromPrivateKey(node->key));
-      if (cert.get() != nullptr) {
+      if (cert.get()) {
         if (cert->nickname && strlen(cert->nickname) > 0) {
           keyName = cert->nickname;
         } else if (cert->emailAddr && strlen(cert->emailAddr) > 0) {
@@ -428,10 +354,9 @@ bool DBTool::ListKeys() {
       continue;
     }
 
-    std::string keyID = StringToHex(
-        std::string(reinterpret_cast<char *>(keyIDItem->data), keyIDItem->len));
+    std::string keyID = StringToHex(keyIDItem);
 
-    if (count == 0) {
+    if (count++ == 0) {
       // print header
       std::cout << std::left << std::setw(20) << "<key#, key name>"
                 << std::setw(20) << "key type"
@@ -439,7 +364,7 @@ bool DBTool::ListKeys() {
     }
 
     std::stringstream leftElem;
-    leftElem << "<" << count++ << ", " << keyName << ">";
+    leftElem << "<" << count << ", " << keyName << ">";
     std::cout << std::left << std::setw(20) << leftElem.str() << std::setw(20)
               << keyTypeName[key->keyType] << keyID << std::endl;
   }
