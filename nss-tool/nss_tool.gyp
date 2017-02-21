@@ -14,6 +14,7 @@
         'nss_tool.cc',
         'common/argparse.cc',
         'db/dbtool.cc',
+        'key/keytool.cc',
       ],
       'include_dirs': [
         'common',

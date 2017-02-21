@@ -10,10 +10,12 @@
 
 #include "argparse.h"
 #include "db/dbtool.h"
+#include "key/keytool.h"
 
 static void Usage() {
   std::cerr << "Usage: nss <command> <subcommand> [options]" << std::endl;
   std::cerr << "       nss db [--path <directory>] <commands>" << std::endl;
+  std::cerr << "       nss key [--path <directory>] <commands>" << std::endl;
 }
 
 int main(int argc, char **argv) {
@@ -22,7 +24,8 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  if (std::string(argv[1]) != "db") {
+  std::string command(argv[1]);
+  if (command != "db" && command != "key") {
     Usage();
     return 1;
   }
@@ -31,10 +34,18 @@ int main(int argc, char **argv) {
   PR_Init(PR_SYSTEM_THREAD, PR_PRIORITY_NORMAL, 1);
 
   std::vector<std::string> arguments(argv + 2, argv + argc);
-  DBTool tool;
-  if (!tool.Run(arguments)) {
-    tool.Usage();
-    exit_code = 1;
+  if (command == "db") {
+    DBTool tool;
+    if (!tool.Run(arguments)) {
+      tool.Usage();
+      exit_code = 1;
+    }
+  } else { /* command == "key" */
+    KeyTool tool;
+    if (!tool.Run(arguments)) {
+      tool.Usage();
+      exit_code = 1;
+    }
   }
 
   PR_Cleanup();
