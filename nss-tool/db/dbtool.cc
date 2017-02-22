@@ -21,6 +21,14 @@
 #include <prerror.h>
 #include <prio.h>
 
+const std::vector<std::string> kCommandArgs({"--create", "--list-certs",
+                                             "--import-cert", "--list-keys"});
+
+static bool HasSingleCommandArgument(const ArgParser &parser) {
+  auto pred = [&](const std::string &cmd) { return parser.Has(cmd); };
+  return std::count_if(kCommandArgs.begin(), kCommandArgs.end(), pred) == 1;
+}
+
 static std::string PrintFlags(unsigned int flags) {
   std::stringstream ss;
   if ((flags & CERTDB_VALID_CA) && !(flags & CERTDB_TRUSTED_CA) &&
@@ -68,17 +76,6 @@ static std::vector<char> ReadFromIstream(std::istream &is) {
 static const char *const keyTypeName[] = {"null", "rsa", "dsa", "fortezza",
                                           "dh",   "kea", "ec"};
 
-static std::string StringToHex(const ScopedSECItem &input) {
-  std::stringstream ss;
-  ss << "0x";
-  for (size_t i = 0; i < input->len; i++) {
-    ss << std::hex << std::setfill('0') << std::setw(2)
-       << static_cast<int>(input->data[i]);
-  }
-
-  return ss.str();
-}
-
 void DBTool::Usage() {
   std::cerr << "Usage: nss db [--path <directory>]" << std::endl;
   std::cerr << "  --create" << std::endl;
@@ -91,15 +88,9 @@ void DBTool::Usage() {
 bool DBTool::Run(const std::vector<std::string> &arguments) {
   ArgParser parser(arguments);
 
-  // xor to assert that exactly one command is given
-  // clang-format off
-  if (((parser.Has("--create") ? 1 : 0) +
-       (parser.Has("--list-certs") ? 1 : 0) +
-       (parser.Has("--import-cert") ? 1 : 0) +
-       (parser.Has("--list-keys") ? 1 : 0)) != 1) {
+  if (!HasSingleCommandArgument(parser)) {
     return false;
   }
-  // clang-format on
 
   PRAccessHow how = PR_ACCESS_READ_OK;
   bool readOnly = true;

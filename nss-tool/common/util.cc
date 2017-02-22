@@ -4,7 +4,9 @@
 
 #include "util.h"
 
+#include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 #include <prerror.h>
@@ -12,54 +14,44 @@
 #if defined(__unix__)
 #include <termios.h>
 #include <unistd.h>
-// http://stackoverflow.com/a/6899073
-#define GET_PASSWORD(promt, pw)              \
-  do {                                       \
-    std::cout << promt << std::endl;         \
-                                             \
-    termios oldt;                            \
-    tcgetattr(STDIN_FILENO, &oldt);          \
-    termios newt = oldt;                     \
-    newt.c_lflag &= ~ECHO;                   \
-    tcsetattr(STDIN_FILENO, TCSANOW, &newt); \
-                                             \
-    std::getline(std::cin, pw);              \
-                                             \
-    tcsetattr(STDIN_FILENO, TCSANOW, &oldt); \
-  } while (0)
-
 #elif defined(WIN32) || defined(_WIN64)
 #include <Windows.h>
-// http://stackoverflow.com/a/6899073
-#define GET_PASSWORD(promt, pw)                         \
-  do {                                                  \
-    std::cout << promt << std::endl;                    \
-                                                        \
-    HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);     \
-    DWORD mode = 0;                                     \
-    GetConsoleMode(hStdin, &mode);                      \
-    SetConsoleMode(hStdin, mode &(~ENABLE_ECHO_INPUT)); \
-                                                        \
-    std::getline(std::cin, pw);                         \
-                                                        \
-    SetConsoleMode(hStdin, mode);                       \
-  } while (0)
-
-#else
-/* fallback implementation */
-#define GET_PASSWORD(promt, pw)      \
-  do {                               \
-    std::cout << promt << std::endl; \
-    std::getline(std::cin, pw);      \
-  } while (0)
 #endif
 
-static char *GetModulePassword(PK11SlotInfo *slot, int retry, void *arg) {
-  PwData *pwData = reinterpret_cast<PwData *>(arg);
+static std::string GetPassword(const std::string &promt) {
+  std::cout << promt << std::endl;
 
-  if (pwData == nullptr) {
+#if defined(__unix__)
+  termios oldt;
+  tcgetattr(STDIN_FILENO, &oldt);
+  termios newt = oldt;
+  newt.c_lflag &= ~ECHO;
+  tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+#elif defined(WIN32) || defined(_WIN64)
+  HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
+  DWORD mode = 0;
+  GetConsoleMode(hStdin, &mode);
+  SetConsoleMode(hStdin, mode & (~ENABLE_ECHO_INPUT));
+#endif
+
+  std::string pw;
+  std::getline(std::cin, pw);
+
+#if defined(__unix__)
+  tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+#elif defined(WIN32) || defined(_WIN64)
+  SetConsoleMode(hStdin, mode);
+#endif
+
+  return pw;
+}
+
+static char *GetModulePassword(PK11SlotInfo *slot, int retry, void *arg) {
+  if (arg == nullptr) {
     return nullptr;
   }
+
+  PwData *pwData = reinterpret_cast<PwData *>(arg);
 
   if (retry > 0) {
     std::cerr << "Incorrect password/PIN entered." << std::endl;
@@ -94,8 +86,8 @@ bool InitSlotPassword(void) {
   std::string pw, pwComp;
 
   while (true) {
-    GET_PASSWORD("Enter new password: ", pw);
-    GET_PASSWORD("Re-enter password: ", pwComp);
+    pw = GetPassword("Enter new password: ");
+    pwComp = GetPassword("Re-enter password: ");
 
     if (pw == pwComp) {
       break;
@@ -114,20 +106,32 @@ bool InitSlotPassword(void) {
 }
 
 bool DBLoginIfNeeded(const ScopedPK11SlotInfo &slot) {
-  PK11_SetPasswordFunc(&GetModulePassword);
-  if (PK11_NeedLogin(slot.get())) {
-    std::string pw;
-    GET_PASSWORD("Enter your password: ", pw);
-    PwData pwData = {PW_PLAINTEXT, const_cast<char *>(pw.c_str())};
-    SECStatus rv = PK11_Authenticate(slot.get(), true /*loadCerts*/, &pwData);
-    if (rv != SECSuccess) {
-      std::cerr << "Could not authenticate to token "
-                << PK11_GetTokenName(slot.get()) << ". Failed with error "
-                << PR_ErrorToName(PR_GetError()) << std::endl;
-      return false;
-    }
-    std::cout << std::endl;
+  if (!PK11_NeedLogin(slot.get())) {
+    return true;
   }
 
+  PK11_SetPasswordFunc(&GetModulePassword);
+  std::string pw = GetPassword("Enter your password: ");
+  PwData pwData = {PW_PLAINTEXT, const_cast<char *>(pw.c_str())};
+  SECStatus rv = PK11_Authenticate(slot.get(), true /*loadCerts*/, &pwData);
+  if (rv != SECSuccess) {
+    std::cerr << "Could not authenticate to token "
+              << PK11_GetTokenName(slot.get()) << ". Failed with error "
+              << PR_ErrorToName(PR_GetError()) << std::endl;
+    return false;
+  }
+  std::cout << std::endl;
+
   return true;
+}
+
+std::string StringToHex(const ScopedSECItem &input) {
+  std::stringstream ss;
+  ss << "0x";
+  for (size_t i = 0; i < input->len; i++) {
+    ss << std::hex << std::setfill('0') << std::setw(2)
+       << static_cast<int>(input->data[i]);
+  }
+
+  return ss.str();
 }
