@@ -89,6 +89,7 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
   ArgParser parser(arguments);
 
   if (!HasSingleCommandArgument(parser)) {
+    Usage();
     return false;
   }
 

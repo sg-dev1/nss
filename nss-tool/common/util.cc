@@ -11,7 +11,7 @@
 
 #include <prerror.h>
 
-#if defined(__unix__)
+#if defined(__unix__) || defined(__APPLE__)
 #include <termios.h>
 #include <unistd.h>
 #elif defined(WIN32) || defined(_WIN64)
@@ -21,7 +21,7 @@
 static std::string GetPassword(const std::string &prompt) {
   std::cout << prompt << std::endl;
 
-#if defined(__unix__)
+#if defined(__unix__) || defined(__APPLE__)
   termios oldt;
   tcgetattr(STDIN_FILENO, &oldt);
   termios newt = oldt;
@@ -37,7 +37,7 @@ static std::string GetPassword(const std::string &prompt) {
   std::string pw;
   std::getline(std::cin, pw);
 
-#if defined(__unix__)
+#if defined(__unix__) || defined(__APPLE__)
   tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
 #elif defined(WIN32) || defined(_WIN64)
   SetConsoleMode(hStdin, mode);
