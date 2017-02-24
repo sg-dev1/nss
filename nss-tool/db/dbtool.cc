@@ -351,7 +351,7 @@ bool DBTool::ListKeys() {
   for (node = PRIVKEY_LIST_HEAD(list.get());
        !PRIVKEY_LIST_END(node, list.get()); node = PRIVKEY_LIST_NEXT(node)) {
     char *keyNameRaw = PK11_GetPrivateKeyNickname(node->key);
-    std::string keyName(keyNameRaw ? "" : keyNameRaw);
+    std::string keyName(keyNameRaw ? keyNameRaw : "");
 
     if (keyName.empty()) {
       ScopedCERTCertificate cert(PK11_GetCertFromPrivateKey(node->key));
