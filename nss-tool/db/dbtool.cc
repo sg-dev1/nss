@@ -104,10 +104,7 @@ void DBTool::Usage() {
   std::cerr << "  --import-cert [<path>] --name <name> [--trusts <trusts>]"
             << std::endl;
   std::cerr << "  --list-keys" << std::endl;
-  // TODO say where public key is need and where not (e.g. not needed for RSA,
-  // ECC? - import needed for DSA, DH)
-  std::cerr << "  --import-key [<path> [-- name <name> [--pub-key <pub-key>]]]"
-            << std::endl;
+  std::cerr << "  --import-key [<path> [-- name <name>]]" << std::endl;
 }
 
 bool DBTool::Run(const std::vector<std::string> &arguments) {
@@ -285,21 +282,7 @@ bool DBTool::ImportCertificate(const ArgParser &parser) {
     return false;
   }
 
-  std::vector<char> certData;
-  if (derFilePath.empty()) {
-    std::cout << "No Certificate file path given, using stdin." << std::endl;
-    certData = ReadFromIstream(std::cin);
-  } else {
-    std::ifstream is(derFilePath, std::ifstream::binary);
-    if (!is.good()) {
-      std::cerr << "IO Error when opening " << derFilePath << std::endl;
-      std::cerr
-          << "Certificate file does not exist or you don't have permissions."
-          << std::endl;
-      return false;
-    }
-    certData = ReadFromIstream(is);
-  }
+  std::vector<char> certData = LoadDataInMemory(derFilePath);
 
   ScopedCERTCertificate cert(
       CERT_DecodeCertFromPackage(certData.data(), certData.size()));
@@ -403,10 +386,6 @@ bool DBTool::ImportKey(const ArgParser &parser) {
   if (parser.Has("--name")) {
     name = parser.Get("--name");
   }
-  std::string pubKeyFilePath;
-  if (parser.Has("--pub-key")) {
-    pubKeyFilePath = parser.Get("--pub-key");
-  }
 
   ScopedPK11SlotInfo slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
   if (slot.get() == nullptr) {
@@ -426,17 +405,6 @@ bool DBTool::ImportKey(const ArgParser &parser) {
       siBuffer, reinterpret_cast<unsigned char *>(privKeyData.data()),
       static_cast<unsigned int>(privKeyData.size())};
 
-  SECItem pkcs8PubKeyItem;
-  pkcs8PubKeyItem = {siBuffer, nullptr, 0};
-  if (!pubKeyFilePath.empty()) {
-    std::vector<char> pubKeyData = LoadDataInMemory(pubKeyFilePath);
-    if (pubKeyData.empty()) {
-      return false;
-    }
-    pkcs8PubKeyItem.data = reinterpret_cast<unsigned char *>(pubKeyData.data());
-    pkcs8PubKeyItem.len = static_cast<unsigned int>(pubKeyData.size());
-  }
-
   SECItem nickname = {siBuffer, nullptr, 0};
   if (!name.empty()) {
     nickname.data = const_cast<unsigned char *>(
@@ -446,8 +414,7 @@ bool DBTool::ImportKey(const ArgParser &parser) {
 
   SECStatus rv = PK11_ImportDERPrivateKeyInfo(
       slot.get(), &pkcs8PrivKeyItem,
-      nickname.data == nullptr ? nullptr : &nickname,
-      pkcs8PubKeyItem.data == nullptr ? nullptr : &pkcs8PubKeyItem,
+      nickname.data == nullptr ? nullptr : &nickname, nullptr /*publicValue*/,
       true /*isPerm*/, false /*isPrivate*/, KU_ALL, nullptr);
   if (rv != SECSuccess) {
     std::cerr << "Error: Import DER Private Key failed with error "
