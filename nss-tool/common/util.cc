@@ -18,8 +18,8 @@
 #include <Windows.h>
 #endif
 
-static std::string GetPassword(const std::string &promt) {
-  std::cout << promt << std::endl;
+static std::string GetPassword(const std::string &prompt) {
+  std::cout << prompt << std::endl;
 
 #if defined(__unix__)
   termios oldt;
@@ -83,13 +83,11 @@ bool InitSlotPassword(void) {
   std::cout << "Enter a password which will be used to encrypt your keys."
             << std::endl
             << std::endl;
-  std::string pw, pwComp;
+  std::string pw;
 
   while (true) {
     pw = GetPassword("Enter new password: ");
-    pwComp = GetPassword("Re-enter password: ");
-
-    if (pw == pwComp) {
+    if (pw == GetPassword("Re-enter password: ")) {
       break;
     }
 
