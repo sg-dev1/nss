@@ -448,10 +448,10 @@ bool DBTool::ImportKey(const ArgParser &parser) {
       slot.get(), &pkcs8PrivKeyItem,
       nickname.data == nullptr ? nullptr : &nickname,
       pkcs8PubKeyItem.data == nullptr ? nullptr : &pkcs8PubKeyItem,
-      false /*isPerm*/, false /*isPrivate*/, KU_ALL, nullptr);
+      true /*isPerm*/, false /*isPrivate*/, KU_ALL, nullptr);
   if (rv != SECSuccess) {
     std::cerr << "Error: Import DER Private Key failed with error "
-              << PR_GetError() << std::endl;
+              << PR_ErrorToName(PR_GetError()) << std::endl;
     return false;
   }
 
