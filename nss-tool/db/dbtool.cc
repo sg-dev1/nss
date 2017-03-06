@@ -8,10 +8,8 @@
 #include "util.h"
 
 #include <dirent.h>
-#include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <memory>
 #include <regex>
 #include <sstream>
 
@@ -29,6 +27,11 @@ const std::vector<std::string> kCommandArgs({"--create", "--list-certs",
 static bool HasSingleCommandArgument(const ArgParser &parser) {
   auto pred = [&](const std::string &cmd) { return parser.Has(cmd); };
   return std::count_if(kCommandArgs.begin(), kCommandArgs.end(), pred) == 1;
+}
+
+static bool HasArgumentRequiringWriteAccess(const ArgParser &parser) {
+  return parser.Has("--create") || parser.Has("--import-cert") ||
+         parser.Has("--import-key");
 }
 
 static std::string PrintFlags(unsigned int flags) {
@@ -64,38 +67,8 @@ static std::string PrintFlags(unsigned int flags) {
   return ss.str();
 }
 
-static std::vector<char> ReadFromIstream(std::istream &is) {
-  std::vector<char> certData;
-  while (is) {
-    char buf[1024];
-    is.read(buf, sizeof(buf));
-    certData.insert(certData.end(), buf, buf + is.gcount());
-  }
-
-  return certData;
-}
-
 static const char *const keyTypeName[] = {"null", "rsa", "dsa", "fortezza",
                                           "dh",   "kea", "ec"};
-
-static std::vector<char> LoadDataInMemory(std::string &dataPath) {
-  std::vector<char> data;
-  if (dataPath.empty()) {
-    std::cout << "No input file path given, using stdin." << std::endl;
-    data = ReadFromIstream(std::cin);
-  } else {
-    std::ifstream is(dataPath, std::ifstream::binary);
-    if (is.good()) {
-      data = ReadFromIstream(is);
-    } else {
-      std::cerr << "IO Error when opening " << dataPath << std::endl;
-      std::cerr << "Input file does not exist or you don't have permissions."
-                << std::endl;
-    }
-  }
-
-  return data;
-}
 
 void DBTool::Usage() {
   std::cerr << "Usage: nss db [--path <directory>]" << std::endl;
@@ -117,8 +90,7 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
 
   PRAccessHow how = PR_ACCESS_READ_OK;
   bool readOnly = true;
-  if (parser.Has("--create") || parser.Has("--import-cert") ||
-      parser.Has("--import-key")) {
+  if (HasArgumentRequiringWriteAccess(parser)) {
     how = PR_ACCESS_WRITE_OK;
     readOnly = false;
   }
@@ -276,13 +248,13 @@ bool DBTool::ImportCertificate(const ArgParser &parser) {
     return false;
   }
 
-  ScopedPK11SlotInfo slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
+  ScopedPK11SlotInfo slot(PK11_GetInternalKeySlot());
   if (slot.get() == nullptr) {
     std::cerr << "Error: Init PK11SlotInfo failed!" << std::endl;
     return false;
   }
 
-  std::vector<char> certData = LoadDataInMemory(derFilePath);
+  std::vector<char> certData = ReadInputData(derFilePath);
 
   ScopedCERTCertificate cert(
       CERT_DecodeCertFromPackage(certData.data(), certData.size()));
@@ -312,7 +284,7 @@ bool DBTool::ImportCertificate(const ArgParser &parser) {
 }
 
 bool DBTool::ListKeys() {
-  ScopedPK11SlotInfo slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
+  ScopedPK11SlotInfo slot(PK11_GetInternalKeySlot());
   if (slot.get() == nullptr) {
     std::cerr << "Error: Init PK11SlotInfo failed!" << std::endl;
     return false;
@@ -387,7 +359,7 @@ bool DBTool::ImportKey(const ArgParser &parser) {
     name = parser.Get("--name");
   }
 
-  ScopedPK11SlotInfo slot = ScopedPK11SlotInfo(PK11_GetInternalKeySlot());
+  ScopedPK11SlotInfo slot(PK11_GetInternalKeySlot());
   if (slot.get() == nullptr) {
     std::cerr << "Error: Init PK11SlotInfo failed!" << std::endl;
     return false;
@@ -397,7 +369,7 @@ bool DBTool::ImportKey(const ArgParser &parser) {
     return false;
   }
 
-  std::vector<char> privKeyData = LoadDataInMemory(privKeyFilePath);
+  std::vector<char> privKeyData = ReadInputData(privKeyFilePath);
   if (privKeyData.empty()) {
     return false;
   }
@@ -417,11 +389,11 @@ bool DBTool::ImportKey(const ArgParser &parser) {
       nickname.data == nullptr ? nullptr : &nickname, nullptr /*publicValue*/,
       true /*isPerm*/, false /*isPrivate*/, KU_ALL, nullptr);
   if (rv != SECSuccess) {
-    std::cerr << "Error: Import DER Private Key failed with error "
+    std::cerr << "Importing a private key in DER format failed with error "
               << PR_ErrorToName(PR_GetError()) << std::endl;
     return false;
   }
 
-  std::cout << "Importing key was successful." << std::endl;
+  std::cout << "Key import succeeded." << std::endl;
   return true;
 }

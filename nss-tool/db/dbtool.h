@@ -15,7 +15,6 @@ class DBTool {
 
  private:
   void Usage();
-
   bool PathHasDBFiles(std::string path);
   void ListCertificates();
   bool ImportCertificate(const ArgParser& parser);
