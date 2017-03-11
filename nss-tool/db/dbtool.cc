@@ -452,7 +452,6 @@ bool DBTool::DeleteKey(const ArgParser &parser) {
     return false;
   }
 
-  int errorCnt = 0, deleteCnt = 0;
   ScopedSECKEYPrivateKeyList list(PK11_ListPrivKeysInSlot(
       slot.get(), const_cast<char *>(keyName.c_str()), nullptr));
   if (list.get() == nullptr) {
@@ -461,10 +460,19 @@ bool DBTool::DeleteKey(const ArgParser &parser) {
               << std::endl;
     return false;
   }
+
+  int errorCnt = 0, deleteCnt = 0;
   SECKEYPrivateKeyListNode *node;
   for (node = PRIVKEY_LIST_HEAD(list.get());
        !PRIVKEY_LIST_END(node, list.get()); node = PRIVKEY_LIST_NEXT(node)) {
-    SECStatus rv = PK11_DeleteTokenPrivateKey(node->key, true);
+    SECKEYPrivateKey *privKey = node->key;
+    // see PK11_DeleteTokenPrivateKey for example usage
+    // calling PK11_DeleteTokenPrivateKey directly does not work because it also
+    // destroys the SECKEYPrivateKey (by calling SECKEY_DestroyPrivateKey) -
+    // then SECKEY_DestroyPrivateKeyList does not
+    // work because it also calls SECKEY_DestroyPrivateKey
+    SECStatus rv =
+        PK11_DestroyTokenObject(privKey->pkcs11Slot, privKey->pkcs11ID);
     if (rv != SECSuccess) {
       errorCnt++;
     } else {
