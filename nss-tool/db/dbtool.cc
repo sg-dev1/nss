@@ -22,7 +22,8 @@
 
 const std::vector<std::string> kCommandArgs({"--create", "--list-certs",
                                              "--import-cert", "--list-keys",
-                                             "--import-key"});
+                                             "--import-key", "--delete-cert",
+                                             "--delete-key"});
 
 static bool HasSingleCommandArgument(const ArgParser &parser) {
   auto pred = [&](const std::string &cmd) { return parser.Has(cmd); };
@@ -31,7 +32,8 @@ static bool HasSingleCommandArgument(const ArgParser &parser) {
 
 static bool HasArgumentRequiringWriteAccess(const ArgParser &parser) {
   return parser.Has("--create") || parser.Has("--import-cert") ||
-         parser.Has("--import-key");
+         parser.Has("--import-key") || parser.Has("--delete-cert") ||
+         parser.Has("--delete-key");
 }
 
 static std::string PrintFlags(unsigned int flags) {
@@ -78,6 +80,8 @@ void DBTool::Usage() {
             << std::endl;
   std::cerr << "  --list-keys" << std::endl;
   std::cerr << "  --import-key [<path> [-- name <name>]]" << std::endl;
+  std::cerr << "  --delete-cert <name>" << std::endl;
+  std::cerr << "  --delete-key <name>" << std::endl;
 }
 
 bool DBTool::Run(const std::vector<std::string> &arguments) {
@@ -146,6 +150,10 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
     ret = ListKeys();
   } else if (parser.Has("--import-key")) {
     ret = ImportKey(parser);
+  } else if (parser.Has("--delete-cert")) {
+    ret = DeleteCert(parser);
+  } else if (parser.Has("--delete-key")) {
+    ret = DeleteKey(parser);
   }
 
   // shutdown nss
@@ -395,5 +403,87 @@ bool DBTool::ImportKey(const ArgParser &parser) {
   }
 
   std::cout << "Key import succeeded." << std::endl;
+  return true;
+}
+
+bool DBTool::DeleteCert(const ArgParser &parser) {
+  std::string certName = parser.Get("--delete-cert");
+  if (certName.empty()) {
+    std::cerr << "A name is required to delete a certificate." << std::endl;
+    Usage();
+    return false;
+  }
+
+  ScopedCERTCertificate cert(CERT_FindCertByNicknameOrEmailAddr(
+      CERT_GetDefaultCertDB(), certName.c_str()));
+  if (!cert) {
+    std::cerr << "Could not find certificate with name " << certName << "."
+              << std::endl;
+    return false;
+  }
+
+  SECStatus rv = SEC_DeletePermCertificate(cert.get());
+  if (rv != SECSuccess) {
+    std::cerr << "Unable to delete certificate with name " << certName << "."
+              << std::endl;
+    return false;
+  }
+
+  std::cout << "Certificate with name " << certName << " deleted successful."
+            << std::endl;
+  return true;
+}
+
+bool DBTool::DeleteKey(const ArgParser &parser) {
+  std::string keyName = parser.Get("--delete-key");
+  if (keyName.empty()) {
+    std::cerr << "A name is required to delete a key." << std::endl;
+    Usage();
+    return false;
+  }
+
+  ScopedPK11SlotInfo slot(PK11_GetInternalKeySlot());
+  if (slot.get() == nullptr) {
+    std::cerr << "Error: Init PK11SlotInfo failed!" << std::endl;
+    return false;
+  }
+
+  if (!DBLoginIfNeeded(slot)) {
+    return false;
+  }
+
+  int errorCnt = 0, deleteCnt = 0;
+  ScopedSECKEYPrivateKeyList list(PK11_ListPrivKeysInSlot(
+      slot.get(), const_cast<char *>(keyName.c_str()), nullptr));
+  if (list.get() == nullptr) {
+    std::cerr << "Fetching private keys with nickname " << keyName
+              << " failed with error " << PR_ErrorToName(PR_GetError())
+              << std::endl;
+    return false;
+  }
+  SECKEYPrivateKeyListNode *node;
+  for (node = PRIVKEY_LIST_HEAD(list.get());
+       !PRIVKEY_LIST_END(node, list.get()); node = PRIVKEY_LIST_NEXT(node)) {
+    SECStatus rv = PK11_DeleteTokenPrivateKey(node->key, true);
+    if (rv != SECSuccess) {
+      errorCnt++;
+    } else {
+      deleteCnt++;
+    }
+  }
+
+  if (deleteCnt > 0) {
+    std::cout << "Successfully deleted " << deleteCnt
+              << " key(s) with nickname " << keyName << "." << std::endl;
+  } else {
+    std::cout << "No with nickname " << keyName << " found to delete."
+              << std::endl;
+  }
+
+  if (errorCnt != 0) {
+    std::cerr << "Could not delete " << errorCnt << " keys." << std::endl;
+    return false;
+  }
+
   return true;
 }
