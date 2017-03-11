@@ -20,10 +20,9 @@
 #include <prerror.h>
 #include <prio.h>
 
-const std::vector<std::string> kCommandArgs({"--create", "--list-certs",
-                                             "--import-cert", "--list-keys",
-                                             "--import-key", "--delete-cert",
-                                             "--delete-key"});
+const std::vector<std::string> kCommandArgs(
+    {"--create", "--list-certs", "--import-cert", "--list-keys", "--import-key",
+     "--delete-cert", "--delete-key", "--change-password"});
 
 static bool HasSingleCommandArgument(const ArgParser &parser) {
   auto pred = [&](const std::string &cmd) { return parser.Has(cmd); };
@@ -33,7 +32,7 @@ static bool HasSingleCommandArgument(const ArgParser &parser) {
 static bool HasArgumentRequiringWriteAccess(const ArgParser &parser) {
   return parser.Has("--create") || parser.Has("--import-cert") ||
          parser.Has("--import-key") || parser.Has("--delete-cert") ||
-         parser.Has("--delete-key");
+         parser.Has("--delete-key") || parser.Has("--change-password");
 }
 
 static std::string PrintFlags(unsigned int flags) {
@@ -75,6 +74,7 @@ static const char *const keyTypeName[] = {"null", "rsa", "dsa", "fortezza",
 void DBTool::Usage() {
   std::cerr << "Usage: nss db [--path <directory>]" << std::endl;
   std::cerr << "  --create" << std::endl;
+  std::cerr << "  --change-password" << std::endl;
   std::cerr << "  --list-certs" << std::endl;
   std::cerr << "  --import-cert [<path>] --name <name> [--trusts <trusts>]"
             << std::endl;
@@ -154,6 +154,8 @@ bool DBTool::Run(const std::vector<std::string> &arguments) {
     ret = DeleteCert(parser);
   } else if (parser.Has("--delete-key")) {
     ret = DeleteKey(parser);
+  } else if (parser.Has("--change-password")) {
+    ret = ChangeSlotPassword();
   }
 
   // shutdown nss
