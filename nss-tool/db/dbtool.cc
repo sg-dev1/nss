@@ -453,24 +453,39 @@ bool DBTool::DeleteKey(const ArgParser &parser) {
   }
 
   int errorCnt = 0, deleteCnt = 0;
-  ScopedSECKEYPrivateKeyList list(PK11_ListPrivKeysInSlot(
-      slot.get(), const_cast<char *>(keyName.c_str()), nullptr));
-  if (list.get() == nullptr) {
+  SECKEYPrivateKeyList *list = PK11_ListPrivKeysInSlot(
+      slot.get(), const_cast<char *>(keyName.c_str()), nullptr);
+  if (!list) {
     std::cerr << "Fetching private keys with nickname " << keyName
               << " failed with error " << PR_ErrorToName(PR_GetError())
               << std::endl;
     return false;
   }
   SECKEYPrivateKeyListNode *node;
-  for (node = PRIVKEY_LIST_HEAD(list.get());
-       !PRIVKEY_LIST_END(node, list.get()); node = PRIVKEY_LIST_NEXT(node)) {
+  for (node = PRIVKEY_LIST_HEAD(list); !PRIVKEY_LIST_END(node, list);
+       node = PRIVKEY_LIST_NEXT(node)) {
     SECStatus rv = PK11_DeleteTokenPrivateKey(node->key, true);
     if (rv != SECSuccess) {
       errorCnt++;
     } else {
+      node->key = nullptr;
       deleteCnt++;
     }
   }
+
+  // manually free SECKEYPrivateKeyList (because PK11_DeleteTokenPrivateKey has
+  // already called SECKEY_DestroyPrivateKey - when also calling
+  // SECKEY_DestroyPrivateKeyList it gets called twice)
+  while (!PR_CLIST_IS_EMPTY(&list->list)) {
+    SECKEYPrivateKeyListNode *node = (SECKEYPrivateKeyListNode *)(PR_LIST_HEAD(
+        &list->list));  // TODO change cast to c++ style cast
+    if (node->key != nullptr) {
+      SECKEY_DestroyPrivateKey(node->key);
+      node->key = nullptr;
+    }
+    PR_REMOVE_LINK(&node->links);
+  }
+  PORT_FreeArena(list->arena, PR_FALSE);
 
   if (deleteCnt > 0) {
     std::cout << "Successfully deleted " << deleteCnt
