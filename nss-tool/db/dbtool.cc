@@ -431,7 +431,7 @@ bool DBTool::DeleteCert(const ArgParser &parser) {
     return false;
   }
 
-  std::cout << "Certificate with name " << certName << " deleted successful."
+  std::cout << "Certificate with name " << certName << " deleted successfully."
             << std::endl;
   return true;
 }
@@ -463,11 +463,12 @@ bool DBTool::DeleteKey(const ArgParser &parser) {
     return false;
   }
 
-  int errorCnt = 0, deleteCnt = 0;
+  int foundKeys = 0, deletedKeys = 0;
   SECKEYPrivateKeyListNode *node;
   for (node = PRIVKEY_LIST_HEAD(list.get());
        !PRIVKEY_LIST_END(node, list.get()); node = PRIVKEY_LIST_NEXT(node)) {
     SECKEYPrivateKey *privKey = node->key;
+    foundKeys++;
     // see PK11_DeleteTokenPrivateKey for example usage
     // calling PK11_DeleteTokenPrivateKey directly does not work because it also
     // destroys the SECKEYPrivateKey (by calling SECKEY_DestroyPrivateKey) -
@@ -475,24 +476,22 @@ bool DBTool::DeleteKey(const ArgParser &parser) {
     // work because it also calls SECKEY_DestroyPrivateKey
     SECStatus rv =
         PK11_DestroyTokenObject(privKey->pkcs11Slot, privKey->pkcs11ID);
-    if (rv != SECSuccess) {
-      errorCnt++;
-    } else {
-      deleteCnt++;
+    if (rv == SECSuccess) {
+      deletedKeys++;
     }
   }
 
-  if (deleteCnt > 0) {
-    std::cout << "Successfully deleted " << deleteCnt
-              << " key(s) with nickname " << keyName << "." << std::endl;
-  } else {
-    std::cout << "No with nickname " << keyName << " found to delete."
-              << std::endl;
+  if (foundKeys != deletedKeys) {
+    std::cerr << "Some keys could not be deleted." << std::endl;
   }
 
-  if (errorCnt != 0) {
-    std::cerr << "Could not delete " << errorCnt << " keys." << std::endl;
-    return false;
+  if (deletedKeys > 0) {
+    std::cout << "Found " << foundKeys << " keys." << std::endl;
+    std::cout << "Successfully deleted " << deletedKeys
+              << " key(s) with nickname " << keyName << "." << std::endl;
+  } else {
+    std::cout << "No key with nickname " << keyName << " found to delete."
+              << std::endl;
   }
 
   return true;

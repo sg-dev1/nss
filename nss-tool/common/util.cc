@@ -132,9 +132,9 @@ bool ChangeSlotPassword(void) {
   PK11_SetPasswordFunc(&GetModulePassword);
   std::string oldPw = GetPassword("Enter your old password: ");
   PwData pwData = {PW_PLAINTEXT, const_cast<char *>(oldPw.c_str())};
-  SECStatus rv = PK11_Authenticate(slot.get(), true /*loadCerts*/, &pwData);
+  SECStatus rv = PK11_Authenticate(slot.get(), false /*loadCerts*/, &pwData);
   if (rv != SECSuccess) {
-    std::cerr << "Old password incorrect." << std::endl;
+    std::cerr << "Current password incorrect." << std::endl;
     return false;
   }
 
@@ -146,6 +146,7 @@ bool ChangeSlotPassword(void) {
     return false;
   }
 
+  std::cout << "Password changed successfully." << std::endl;
   return true;
 }
 
