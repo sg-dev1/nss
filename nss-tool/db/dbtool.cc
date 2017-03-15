@@ -463,7 +463,7 @@ bool DBTool::DeleteKey(const ArgParser &parser) {
     return false;
   }
 
-  int foundKeys = 0, deletedKeys = 0;
+  unsigned int foundKeys = 0, deletedKeys = 0;
   SECKEYPrivateKeyListNode *node;
   for (node = PRIVKEY_LIST_HEAD(list.get());
        !PRIVKEY_LIST_END(node, list.get()); node = PRIVKEY_LIST_NEXT(node)) {
@@ -481,7 +481,7 @@ bool DBTool::DeleteKey(const ArgParser &parser) {
     }
   }
 
-  if (foundKeys != deletedKeys) {
+  if (foundKeys > deletedKeys) {
     std::cerr << "Some keys could not be deleted." << std::endl;
   }
 
