@@ -34,6 +34,7 @@ struct ScopedDelete {
     SECKEY_DestroyPrivateKeyList(list);
   }
   void operator()(PK11URI* uri) { PK11URI_DestroyURI(uri); }
+  void operator()(PK11Context* context) { PK11_DestroyContext(context, true); }
 };
 
 template <class T>
@@ -62,6 +63,7 @@ SCOPED(SECKEYPublicKey);
 SCOPED(SECKEYPrivateKey);
 SCOPED(SECKEYPrivateKeyList);
 SCOPED(PK11URI);
+SCOPED(PK11Context);
 
 #undef SCOPED
 

@@ -5,16 +5,18 @@
 #ifndef digest_tool_h__
 #define digest_tool_h__
 
+#include <secoid.h>
 #include <string>
 #include <vector>
+#include "tool.h"
 
-class DigestTool {
+class DigestTool : public Tool {
  public:
-  bool Run(const std::vector<std::string>& arguments);
+  bool Run(const std::vector<std::string>& arguments) override;
 
  private:
-  void Usage();
-  bool Digest();
+  void Usage() override;
+  bool Digest(SECOidData* hashOID);
 };
 
 #endif  // digest_tool_h__

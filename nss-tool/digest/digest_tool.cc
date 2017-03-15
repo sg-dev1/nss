@@ -4,11 +4,15 @@
 
 #include "digest_tool.h"
 #include "argparse.h"
+#include "scoped_ptrs.h"
 
+#include <algorithm>
 #include <iostream>
 
 #include <hasht.h>
-#include <secoid.h>
+#include <nss.h>
+#include <pk11pub.h>
+#include <prio.h>
 
 static SECOidData* HashTypeToOID(HASH_HashType hashtype) {
   SECOidTag hashtag;
@@ -53,12 +57,31 @@ static SECOidData* HashNameToOID(const std::string& hashName) {
 
   for (htypeInt = HASH_AlgNULL + 1; htypeInt < HASH_AlgTOTAL; htypeInt++) {
     hashOID = HashTypeToOID(static_cast<HASH_HashType>(htypeInt));
+    // std::cout << "hashOID->desc: " << hashOID->desc << std::endl;
     if (hashName == std::string(hashOID->desc)) break;
   }
 
   if (static_cast<HASH_HashType>(htypeInt) == HASH_AlgTOTAL) return nullptr;
 
   return hashOID;
+}
+
+static bool ApplyDigest(std::istream& is, ScopedPK11Context& hashCtx) {
+  while (is) {
+    unsigned char buf[4096];
+    is.read(reinterpret_cast<char*>(buf), sizeof(buf));
+    if (is.fail() && !is.eof()) {
+      std::cerr << "Error reading from input stream." << std::endl;
+      return false;
+    }
+    SECStatus rv = PK11_DigestOp(hashCtx.get(), buf, is.gcount());
+    if (rv != SECSuccess) {
+      std::cerr << "PK11_DigestOp failed." << std::endl;
+      return false;
+    }
+  }
+
+  return true;
 }
 
 bool DigestTool::Run(const std::vector<std::string>& arguments) {
@@ -69,32 +92,67 @@ bool DigestTool::Run(const std::vector<std::string>& arguments) {
     return false;
   }
 
-  // TODO handle --path  ---> common code from dbtool
-  // TODO nss init
+  // no need for a db for the digest tool
+  SECStatus rv = NSS_NoDB_Init(".");
+  if (rv != SECSuccess) {
+    std::cerr << "NSS init failed!" << std::endl;
+    return false;
+  }
 
-  const std::string hashName = parser.GetPositionalArgument(0);
+  std::string hashName = parser.GetPositionalArgument(0);
+  std::transform(hashName.begin(), hashName.end(), hashName.begin(), ::toupper);
   SECOidData* hashOID = HashNameToOID(hashName);
   if (hashOID == nullptr) {
     std::cerr << "Invalid digest type " << hashName << "." << std::endl;
     return false;
   }
 
-  // TODO digest
+  Digest(hashOID);
 
-  // TODO nss shutdown
+  // shutdown nss
+  if (NSS_Shutdown() != SECSuccess) {
+    std::cerr << "NSS Shutdown failed!" << std::endl;
+    return false;
+  }
 
   return true;
 }
 
 void DigestTool::Usage() {
-  std::cerr << "Usage: nss digest [md5|sha1|sha256|sha512] [--path <directory>]"
+  std::cerr << "Usage: nss digest [md5|sha-1|sha-256|sha-384|sha-512|sha-224]"
             << std::endl;
+  // TODO options --infile, --outfile, --binary (for output)
 }
 
-bool DigestTool::Digest() {
+bool DigestTool::Digest(SECOidData* hashOID) {
   // #include <hasht.h>
   // unsigned char digest[HASH_LENGTH_MAX];
   // see hasht.h for supported digest types
-  // TODO
+
+  ScopedPK11Context hashCtx(PK11_CreateDigestContext(hashOID->offset));
+  if (hashCtx == nullptr) {
+    std::cerr << "Creating digest context failed." << std::endl;
+    return false;
+  }
+  PK11_DigestBegin(hashCtx.get());
+
+  if (!ApplyDigest(std::cin, hashCtx)) {
+    return false;
+  }
+
+  unsigned char digest[HASH_LENGTH_MAX];
+  unsigned int len;
+  SECStatus rv = PK11_DigestFinal(hashCtx.get(), digest, &len, HASH_LENGTH_MAX);
+  if (rv != SECSuccess) {
+    std::cerr << "Calculating final hash value failed." << std::endl;
+    return false;
+  }
+
+  // human readable output
+  for (unsigned int i = 0; i < len; i++) {
+    std::cout << std::hex << static_cast<int>(digest[i]);
+  }
+  std::cout << std::endl;
+
   return true;
 }
