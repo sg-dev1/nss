@@ -5,6 +5,8 @@
 #ifndef digest_tool_h__
 #define digest_tool_h__
 
+#include "argparse.h"
+
 #include <secoid.h>
 #include <string>
 #include <vector>
@@ -16,7 +18,7 @@ class DigestTool : public Tool {
 
  private:
   void Usage() override;
-  bool Digest(SECOidData* hashOID);
+  bool Digest(const ArgParser& parser, SECOidData* hashOID);
 };
 
 #endif  // digest_tool_h__

@@ -23,6 +23,7 @@ static void Usage() {
   std::cerr << "       nss encrypt <options>" << std::endl;
   std::cerr << "       nss decrypt <options>" << std::endl;
   std::cerr << "       nss digest <args>" << std::endl;
+  std::cerr << "       nss digest <algorithm>" << std::endl;
 }
 
 static const std::string kDbCommand = "db";

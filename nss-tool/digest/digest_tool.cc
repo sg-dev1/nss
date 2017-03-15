@@ -3,13 +3,14 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "digest_tool.h"
-#include "argparse.h"
 #include "scoped_ptrs.h"
 
 #include <algorithm>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 
-#include <hasht.h>
+#include <hasht.h>  // contains supported digest types
 #include <nss.h>
 #include <pk11pub.h>
 #include <prio.h>
@@ -57,7 +58,6 @@ static SECOidData* HashNameToOID(const std::string& hashName) {
 
   for (htypeInt = HASH_AlgNULL + 1; htypeInt < HASH_AlgTOTAL; htypeInt++) {
     hashOID = HashTypeToOID(static_cast<HASH_HashType>(htypeInt));
-    // std::cout << "hashOID->desc: " << hashOID->desc << std::endl;
     if (hashName == std::string(hashOID->desc)) break;
   }
 
@@ -107,7 +107,7 @@ bool DigestTool::Run(const std::vector<std::string>& arguments) {
     return false;
   }
 
-  Digest(hashOID);
+  bool ret = Digest(parser, hashOID);
 
   // shutdown nss
   if (NSS_Shutdown() != SECSuccess) {
@@ -115,19 +115,20 @@ bool DigestTool::Run(const std::vector<std::string>& arguments) {
     return false;
   }
 
-  return true;
+  return ret;
 }
 
 void DigestTool::Usage() {
-  std::cerr << "Usage: nss digest [md5|sha-1|sha-256|sha-384|sha-512|sha-224]"
+  std::cerr << "Usage: nss digest md5|sha-1|sha-256|sha-384|sha-512|sha-224 "
+               "[--infile <path>]"
             << std::endl;
-  // TODO options --infile, --outfile, --binary (for output)
 }
 
-bool DigestTool::Digest(SECOidData* hashOID) {
-  // #include <hasht.h>
-  // unsigned char digest[HASH_LENGTH_MAX];
-  // see hasht.h for supported digest types
+bool DigestTool::Digest(const ArgParser& parser, SECOidData* hashOID) {
+  std::string inputFile;
+  if (parser.Has("--infile")) {
+    inputFile = parser.Get("--infile");
+  }
 
   ScopedPK11Context hashCtx(PK11_CreateDigestContext(hashOID->offset));
   if (hashCtx == nullptr) {
@@ -136,7 +137,21 @@ bool DigestTool::Digest(SECOidData* hashOID) {
   }
   PK11_DigestBegin(hashCtx.get());
 
-  if (!ApplyDigest(std::cin, hashCtx)) {
+  bool ret = true;
+  if (inputFile.empty()) {
+    ret = ApplyDigest(std::cin, hashCtx);
+  } else {
+    std::ifstream is(inputFile, std::ifstream::binary);
+    if (is.good()) {
+      ret = ApplyDigest(is, hashCtx);
+    } else {
+      std::cerr << "IO Error when opening " << inputFile << std::endl;
+      std::cerr << "Input file does not exist or you don't have permissions."
+                << std::endl;
+      ret = false;
+    }
+  }
+  if (!ret) {
     return false;
   }
 
@@ -150,7 +165,8 @@ bool DigestTool::Digest(SECOidData* hashOID) {
 
   // human readable output
   for (unsigned int i = 0; i < len; i++) {
-    std::cout << std::hex << static_cast<int>(digest[i]);
+    std::cout << std::setw(2) << std::setfill('0') << std::hex
+              << static_cast<int>(digest[i]);
   }
   std::cout << std::endl;
 
