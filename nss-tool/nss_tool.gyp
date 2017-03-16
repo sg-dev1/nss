@@ -26,6 +26,23 @@
         '<(DEPTH)/exports.gyp:dbm_exports',
         '<(DEPTH)/exports.gyp:nss_exports',
       ],
-    }
+    },
+    {
+      'target_name' : 'nss_tool_static',
+      'type' : 'static_library',
+      'sources': [
+        'common/argparse.cc',
+        'common/util.cc',
+        'db/dbtool.cc',
+      ],
+      'include_dirs': [
+        'common',
+      ],
+      'dependencies': [
+        '<(DEPTH)/cpputil/cpputil.gyp:cpputil',
+        '<(DEPTH)/exports.gyp:dbm_exports',
+        '<(DEPTH)/exports.gyp:nss_exports',
+      ]
+    },
   ],
 }

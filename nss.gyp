@@ -185,6 +185,7 @@
             'gtests/ssl_gtest/ssl_gtest.gyp:ssl_gtest',
             'gtests/util_gtest/util_gtest.gyp:util_gtest',
             'gtests/nss_bogo_shim/nss_bogo_shim.gyp:nss_bogo_shim',
+            'gtests/nss_tool_gtest/nss_tool_gtest.gyp:nss_tool_gtest',
           ],
           'conditions': [
             [ 'OS=="linux"', {
