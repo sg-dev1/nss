@@ -12,7 +12,7 @@
       'type': 'executable',
       'sources': [
         'dbtool_unittest.cc',
-        'gtests.cc'
+        'nss_tool_gtests.cc',
       ],
       'include_dirs': [
         '<(DEPTH)/nss-tool/common',
@@ -21,11 +21,11 @@
       'dependencies': [
         '<(DEPTH)/exports.gyp:nss_exports',
         '<(DEPTH)/gtests/google_test/google_test.gyp:gtest',
-        '<(DEPTH)/nss-tool/nss_tool.gyp:nss_tool_static'
+        '<(DEPTH)/nss-tool/nss_tool.gyp:nss_tool_static',
       ]
     }
   ],
   'variables': {
-    'module': 'nss'
+    'module': 'nss',
   }
 }
