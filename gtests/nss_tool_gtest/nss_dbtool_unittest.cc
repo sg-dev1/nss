@@ -18,6 +18,12 @@ namespace nss_test {
 
 const std::vector<std::string> kDbFiles({"key3.db", "cert8.db", "secmod.db"});
 
+#if defined(__unix__) || defined(__APPLE__)
+const std::string pathSep("/");
+#else
+const std::string pathSep("\\");
+#endif
+
 const unsigned int certificateDerDataLength = 865;
 const char *certificateDerData =
     "\x30\x82\x03\x5D\x30\x82\x02\x45\xA0\x03\x02\x01\x02\x02\x09\x00"
@@ -113,88 +119,70 @@ const char *ecPrivateKey =
     "\xBC\x99\xA4\x1A\xE9\xE9\x56\x28\xBC\x64\xF2\xF1\xB2\x0C\x2D\x7E"
     "\x9F\x51\x77\xA3\xC2\x94\xD4\x46\x22\x99";
 
-class DBToolTest : public ::testing::Test {};
+class DBToolTest : public ::testing::Test {
+ protected:
+  virtual void SetUp() {
+    std::cout << "Creating db files in working dir: " << g_working_dir_path
+              << std::endl;
 
-#if defined(__unix__) || defined(__APPLE__)
-const std::string pathSep("/");
-#else
-const std::string pathSep("\\");
-#endif
+    std::istringstream passwordInput("a\na\n");
+    auto cinBuffer = std::cin.rdbuf();
+    std::cin.rdbuf(passwordInput.rdbuf());
 
-static void CreateDBFiles() {
-  std::cout << "Creating db files in working dir: " << g_working_dir_path
-            << std::endl;
+    const std::vector<std::string> arguments = {"--create", "--path",
+                                                g_working_dir_path};
+    DBTool tool;
+    EXPECT_TRUE(tool.Run(arguments));
 
-  std::istringstream passwordInput("a\na\n");
-  auto cinBuffer = std::cin.rdbuf();
-  std::cin.rdbuf(passwordInput.rdbuf());
-
-  const std::vector<std::string> arguments = {"--create", "--path",
-                                              g_working_dir_path};
-  DBTool tool;
-  EXPECT_TRUE(tool.Run(arguments));
-
-  std::cin.rdbuf(cinBuffer);
-}
-
-static void RemoveDBFiles() {
-  std::cout << "Removing db files..." << std::endl;
-
-  for (auto const &value : kDbFiles) {
-    std::string dbFilePath = g_working_dir_path + pathSep + value;
-    std::remove(dbFilePath.c_str());
+    std::cin.rdbuf(cinBuffer);
   }
-}
 
-static std::string CreateTempFile(const char *data,
-                                  const unsigned int dataLength) {
-  std::string tmpFilePath = g_working_dir_path + pathSep + "tempfile";
-  std::ofstream outfile(tmpFilePath, std::ofstream::binary);
-  outfile.write(data, dataLength);
-  outfile.close();
+  virtual void TearDown() {
+    std::cout << "Removing db files..." << std::endl;
 
-  return tmpFilePath;
-}
+    for (auto const &value : kDbFiles) {
+      std::string dbFilePath = g_working_dir_path + pathSep + value;
+      std::remove(dbFilePath.c_str());
+    }
+  }
 
-static void RunTool(const std::vector<std::string> arguments) {
-  CreateDBFiles();
+  std::string CreateTempFile(const char *data, const unsigned int dataLength) {
+    std::string tmpFilePath = g_working_dir_path + pathSep + "tempfile";
+    std::ofstream outfile(tmpFilePath, std::ofstream::binary);
+    outfile.write(data, dataLength);
+    outfile.close();
 
-  DBTool tool;
-  EXPECT_TRUE(tool.Run(arguments));
+    return tmpFilePath;
+  }
 
-  RemoveDBFiles();
-}
+  void RunTool(const std::vector<std::string> arguments) {
+    DBTool tool;
+    EXPECT_TRUE(tool.Run(arguments));
+  }
 
-static void RunToolWithModifiedCin(std::istringstream &passwordInput,
-                                   const std::vector<std::string> arguments) {
-  CreateDBFiles();
+  void RunToolWithModifiedCin(std::istringstream &passwordInput,
+                              const std::vector<std::string> arguments) {
+    auto cinBuffer = std::cin.rdbuf();
+    std::cin.rdbuf(passwordInput.rdbuf());
 
-  auto cinBuffer = std::cin.rdbuf();
-  std::cin.rdbuf(passwordInput.rdbuf());
+    DBTool tool;
+    EXPECT_TRUE(tool.Run(arguments));
 
-  DBTool tool;
-  EXPECT_TRUE(tool.Run(arguments));
+    std::cin.rdbuf(cinBuffer);
+  }
 
-  std::cin.rdbuf(cinBuffer);
-  RemoveDBFiles();
-}
+  void ImportKeyTest(const char *keyData, const unsigned int keyLength,
+                     std::string keyName) {
+    std::istringstream passwordInput("a\n");
+    std::string keyToImportPath = CreateTempFile(keyData, keyLength);
+    const std::vector<std::string> arguments = {
+        "--import-key", keyToImportPath, "--name",
+        keyName,        "--path",        g_working_dir_path};
+    RunToolWithModifiedCin(passwordInput, arguments);
 
-static void ImportKeyTest(const char *keyData, const unsigned int keyLength,
-                          std::string keyName) {
-  std::istringstream passwordInput("a\n");
-  std::string keyToImportPath = CreateTempFile(keyData, keyLength);
-  const std::vector<std::string> arguments = {
-      "--import-key", keyToImportPath, "--name",
-      keyName,        "--path",        g_working_dir_path};
-  RunToolWithModifiedCin(passwordInput, arguments);
-
-  std::remove(keyToImportPath.c_str());
-}
-
-TEST_F(DBToolTest, DBCreateTest) {
-  CreateDBFiles();
-  RemoveDBFiles();
-}
+    std::remove(keyToImportPath.c_str());
+  }
+};
 
 TEST_F(DBToolTest, ListCerts) {
   const std::vector<std::string> arguments = {"--list-certs", "--path",
@@ -228,8 +216,6 @@ TEST_F(DBToolTest, ImportCert) {
 }
 
 TEST_F(DBToolTest, ImportListDeleteCert) {
-  CreateDBFiles();
-
   std::string certName("myCert");
   std::string certToImportPath =
       CreateTempFile(certificateDerData, certificateDerDataLength);
@@ -249,13 +235,9 @@ TEST_F(DBToolTest, ImportListDeleteCert) {
   const std::vector<std::string> deleteCertArguments = {
       "--delete-cert", certName, "--path", g_working_dir_path};
   EXPECT_TRUE(tool.Run(deleteCertArguments));
-
-  RemoveDBFiles();
 }
 
 TEST_F(DBToolTest, ImportListDeleteKey) {
-  CreateDBFiles();
-
   std::string keyName("myKey");
   std::string keyToImportPath =
       CreateTempFile(rsaPrivateKey, rsaPrivateKeyLength);
@@ -280,7 +262,6 @@ TEST_F(DBToolTest, ImportListDeleteKey) {
   tool.Run(deleteKeyArguments);
 
   std::cin.rdbuf(cinBuffer);
-  RemoveDBFiles();
 }
 
 TEST_F(DBToolTest, ImportRsaKey) {
@@ -298,8 +279,6 @@ TEST_F(DBToolTest, WrongPathTest) {
 }
 
 TEST_F(DBToolTest, WrongPassword) {
-  CreateDBFiles();
-
   std::istringstream passwordInput("wrongPassword\n");
   const std::vector<std::string> arguments = {"--list-keys", "--path",
                                               g_working_dir_path};
@@ -310,7 +289,6 @@ TEST_F(DBToolTest, WrongPassword) {
   EXPECT_FALSE(tool.Run(arguments));
 
   std::cin.rdbuf(cinBuffer);
-  RemoveDBFiles();
 }
 
 }  // namespace nss_test
