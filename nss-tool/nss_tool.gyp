@@ -22,9 +22,7 @@
         'common',
       ],
       'dependencies' : [
-        '<(DEPTH)/cpputil/cpputil.gyp:cpputil',
-        '<(DEPTH)/exports.gyp:dbm_exports',
-        '<(DEPTH)/exports.gyp:nss_exports',
+        'nss_tool_static',
       ],
     },
     {
