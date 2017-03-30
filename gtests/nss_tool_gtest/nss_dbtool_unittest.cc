@@ -16,6 +16,8 @@ extern std::string g_working_dir_path;
 
 namespace nss_test {
 
+const std::vector<std::string> kDbFiles({"key3.db", "cert8.db", "secmod.db"});
+
 const unsigned int certificateDerDataLength = 865;
 const char *certificateDerData =
     "\x30\x82\x03\x5D\x30\x82\x02\x45\xA0\x03\x02\x01\x02\x02\x09\x00"
@@ -113,13 +115,13 @@ const char *ecPrivateKey =
 
 class DBToolTest : public ::testing::Test {};
 
-#if defined(WIN32) || defined(_WIN64)
-const std::string pathSep("\\");
-#else
+#if defined(__unix__) || defined(__APPLE__)
 const std::string pathSep("/");
+#else
+const std::string pathSep("\\");
 #endif
 
-static void CreateDBFiles(void) {
+static void CreateDBFiles() {
   std::cout << "Creating db files in working dir: " << g_working_dir_path
             << std::endl;
 
@@ -135,15 +137,13 @@ static void CreateDBFiles(void) {
   std::cin.rdbuf(cinBuffer);
 }
 
-static void RemoveDBFiles(void) {
+static void RemoveDBFiles() {
   std::cout << "Removing db files..." << std::endl;
 
-  std::string keyDBFile = g_working_dir_path + pathSep + "key3.db";
-  std::remove(keyDBFile.c_str());
-  std::string certDBFile = g_working_dir_path + pathSep + "cert8.db";
-  std::remove(certDBFile.c_str());
-  std::string secModDBFile = g_working_dir_path + pathSep + "secmod.db";
-  std::remove(secModDBFile.c_str());
+  for (auto const &value : kDbFiles) {
+    std::string dbFilePath = g_working_dir_path + pathSep + value;
+    std::remove(dbFilePath.c_str());
+  }
 }
 
 static std::string CreateTempFile(const char *data,
@@ -233,22 +233,22 @@ TEST_F(DBToolTest, ImportListDeleteCert) {
   std::string certName("myCert");
   std::string certToImportPath =
       CreateTempFile(certificateDerData, certificateDerDataLength);
-  const std::vector<std::string> arguments1 = {
+  const std::vector<std::string> importCertArguments = {
       "--import-cert", certToImportPath, "--name",
       certName,        "--path",         g_working_dir_path};
 
   DBTool tool;
-  EXPECT_TRUE(tool.Run(arguments1));
+  EXPECT_TRUE(tool.Run(importCertArguments));
 
   std::remove(certToImportPath.c_str());
 
-  const std::vector<std::string> arguments2 = {"--list-certs", "--path",
-                                               g_working_dir_path};
-  EXPECT_TRUE(tool.Run(arguments2));
+  const std::vector<std::string> listCertArguments = {"--list-certs", "--path",
+                                                      g_working_dir_path};
+  EXPECT_TRUE(tool.Run(listCertArguments));
 
-  const std::vector<std::string> arguments3 = {"--delete-cert", certName,
-                                               "--path", g_working_dir_path};
-  EXPECT_TRUE(tool.Run(arguments3));
+  const std::vector<std::string> deleteCertArguments = {
+      "--delete-cert", certName, "--path", g_working_dir_path};
+  EXPECT_TRUE(tool.Run(deleteCertArguments));
 
   RemoveDBFiles();
 }
@@ -259,7 +259,7 @@ TEST_F(DBToolTest, ImportListDeleteKey) {
   std::string keyName("myKey");
   std::string keyToImportPath =
       CreateTempFile(rsaPrivateKey, rsaPrivateKeyLength);
-  const std::vector<std::string> arguments1 = {
+  const std::vector<std::string> importKeyArguments = {
       "--import-key", keyToImportPath, "--name",
       keyName,        "--path",        g_working_dir_path};
 
@@ -268,16 +268,16 @@ TEST_F(DBToolTest, ImportListDeleteKey) {
   std::cin.rdbuf(passwordInput.rdbuf());
 
   DBTool tool;
-  EXPECT_TRUE(tool.Run(arguments1));
+  EXPECT_TRUE(tool.Run(importKeyArguments));
   std::remove(keyToImportPath.c_str());
 
-  const std::vector<std::string> arguments2 = {"--list-keys", "--path",
-                                               g_working_dir_path};
-  tool.Run(arguments2);
+  const std::vector<std::string> listKeyArguments = {"--list-keys", "--path",
+                                                     g_working_dir_path};
+  tool.Run(listKeyArguments);
 
-  const std::vector<std::string> arguments3 = {"--delete-key", keyName,
-                                               "--path", g_working_dir_path};
-  tool.Run(arguments3);
+  const std::vector<std::string> deleteKeyArguments = {
+      "--delete-key", keyName, "--path", g_working_dir_path};
+  tool.Run(deleteKeyArguments);
 
   std::cin.rdbuf(cinBuffer);
   RemoveDBFiles();
@@ -287,8 +287,6 @@ TEST_F(DBToolTest, ImportRsaKey) {
   ImportKeyTest(rsaPrivateKey, rsaPrivateKeyLength, "rsaKey");
 }
 
-// For this test to succeed run
-// export LD_LIBRARY_PATH=<working-dir>/dist/Debug/lib
 TEST_F(DBToolTest, ImportECKey) {
   ImportKeyTest(ecPrivateKey, ecPrivateKeyLength, "ecKey");
 }

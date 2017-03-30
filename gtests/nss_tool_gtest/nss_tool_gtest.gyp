@@ -11,7 +11,7 @@
       'target_name': 'nss_tool_gtest',
       'type': 'executable',
       'sources': [
-        'dbtool_unittest.cc',
+        'nss_dbtool_unittest.cc',
         'nss_tool_gtests.cc',
       ],
       'include_dirs': [
