@@ -13,7 +13,7 @@
 
 #include "argparse.h"
 #include "db/dbtool.h"
-#include "digest/digest_tool.h"
+#include "digest/tool.h"
 #include "enc/enctool.h"
 #include "tool.h"
 

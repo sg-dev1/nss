@@ -2,8 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include "digest_tool.h"
+#include "tool.h"
 #include "scoped_ptrs.h"
+#include "util.h"
 
 #include <algorithm>
 #include <fstream>
@@ -18,12 +19,11 @@
 static SECOidData* HashTypeToOID(HASH_HashType hashtype) {
   SECOidTag hashtag;
 
-  if (hashtype <= HASH_AlgNULL || hashtype >= HASH_AlgTOTAL) return nullptr;
+  if (hashtype <= HASH_AlgNULL || hashtype >= HASH_AlgTOTAL) {
+    return nullptr;
+  }
 
   switch (hashtype) {
-    case HASH_AlgMD2:
-      hashtag = SEC_OID_MD2;
-      break;
     case HASH_AlgMD5:
       hashtag = SEC_OID_MD5;
       break;
@@ -43,9 +43,6 @@ static SECOidData* HashTypeToOID(HASH_HashType hashtype) {
       hashtag = SEC_OID_SHA224;
       break;
     default:
-      std::cerr << "A new hash type has been added to HASH_HashType."
-                << std::endl;
-      std::cerr << "This program needs to be updated!" << std::endl;
       return nullptr;
   }
 
@@ -53,20 +50,28 @@ static SECOidData* HashTypeToOID(HASH_HashType hashtype) {
 }
 
 static SECOidData* HashNameToOID(const std::string& hashName) {
-  int htypeInt;
+  size_t htypeInt;
   SECOidData* hashOID;
 
   for (htypeInt = HASH_AlgNULL + 1; htypeInt < HASH_AlgTOTAL; htypeInt++) {
     hashOID = HashTypeToOID(static_cast<HASH_HashType>(htypeInt));
-    if (hashName == std::string(hashOID->desc)) break;
+    if (hashOID == nullptr) {
+      continue;
+    }
+
+    if (hashName == std::string(hashOID->desc)) {
+      break;
+    }
   }
 
-  if (static_cast<HASH_HashType>(htypeInt) == HASH_AlgTOTAL) return nullptr;
+  if (static_cast<HASH_HashType>(htypeInt) == HASH_AlgTOTAL) {
+    return nullptr;
+  }
 
   return hashOID;
 }
 
-static bool ApplyDigest(std::istream& is, ScopedPK11Context& hashCtx) {
+static bool ComputeDigest(std::istream& is, ScopedPK11Context& hashCtx) {
   while (is) {
     unsigned char buf[4096];
     is.read(reinterpret_cast<char*>(buf), sizeof(buf));
@@ -103,7 +108,7 @@ bool DigestTool::Run(const std::vector<std::string>& arguments) {
   std::transform(hashName.begin(), hashName.end(), hashName.begin(), ::toupper);
   SECOidData* hashOID = HashNameToOID(hashName);
   if (hashOID == nullptr) {
-    std::cerr << "Invalid digest type " << hashName << "." << std::endl;
+    std::cerr << "Error: Unknown digest type " << hashName << "." << std::endl;
     return false;
   }
 
@@ -137,28 +142,16 @@ bool DigestTool::Digest(const ArgParser& parser, SECOidData* hashOID) {
   }
   PK11_DigestBegin(hashCtx.get());
 
-  bool ret = true;
-  if (inputFile.empty()) {
-    ret = ApplyDigest(std::cin, hashCtx);
-  } else {
-    std::ifstream is(inputFile, std::ifstream::binary);
-    if (is.good()) {
-      ret = ApplyDigest(is, hashCtx);
-    } else {
-      std::cerr << "IO Error when opening " << inputFile << std::endl;
-      std::cerr << "Input file does not exist or you don't have permissions."
-                << std::endl;
-      ret = false;
-    }
-  }
-  if (!ret) {
+  std::ifstream fis;
+  std::istream& is = GetStreamFromFileOrStdin(inputFile, fis);
+  if (!is.good() || !ComputeDigest(is, hashCtx)) {
     return false;
   }
 
   unsigned char digest[HASH_LENGTH_MAX];
   unsigned int len;
   SECStatus rv = PK11_DigestFinal(hashCtx.get(), digest, &len, HASH_LENGTH_MAX);
-  if (rv != SECSuccess) {
+  if (rv != SECSuccess || len == 0) {
     std::cerr << "Calculating final hash value failed." << std::endl;
     return false;
   }

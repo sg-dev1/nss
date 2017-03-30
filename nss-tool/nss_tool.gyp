@@ -16,7 +16,7 @@
         'common/util.cc',
         'db/dbtool.cc',
         'enc/enctool.cc',
-        'digest/digest_tool.cc'
+        'digest/tool.cc'
       ],
       'include_dirs': [
         'common',
