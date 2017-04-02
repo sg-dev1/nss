@@ -221,22 +221,31 @@ static bool Digest(std::string &input, std::string &output) {
   return true;
 }
 
+class StdInputStreamManipulator {
+ public:
+  StdInputStreamManipulator(std::istringstream &newCin)
+      : cinBuffer_(std::cin.rdbuf()) {
+    std::cin.rdbuf(newCin.rdbuf());
+  }
+
+  ~StdInputStreamManipulator() { std::cin.rdbuf(cinBuffer_); }
+
+ private:
+  std::basic_streambuf<char> *cinBuffer_;
+};
+
 class DBToolTest : public ::testing::Test {
  protected:
   virtual void SetUp() {
     std::cout << "Creating db files in working dir: " << g_working_dir_path
               << std::endl;
-
     std::istringstream passwordInput("a\na\n");
-    auto cinBuffer = std::cin.rdbuf();
-    std::cin.rdbuf(passwordInput.rdbuf());
+    StdInputStreamManipulator manipulator(passwordInput);
 
     const std::vector<std::string> arguments = {"--create", "--path",
                                                 g_working_dir_path};
     DBTool tool;
     EXPECT_TRUE(tool.Run(arguments));
-
-    std::cin.rdbuf(cinBuffer);
   }
 
   virtual void TearDown() {
@@ -275,13 +284,10 @@ class DBToolTest : public ::testing::Test {
 
   void RunToolWithModifiedCin(std::istringstream &passwordInput,
                               const std::vector<std::string> arguments) {
-    auto cinBuffer = std::cin.rdbuf();
-    std::cin.rdbuf(passwordInput.rdbuf());
+    StdInputStreamManipulator manipulator(passwordInput);
 
     DBTool tool;
     EXPECT_TRUE(tool.Run(arguments));
-
-    std::cin.rdbuf(cinBuffer);
   }
 
   void ImportKeyTest(const char *keyData, const unsigned int keyLength,
@@ -361,8 +367,7 @@ TEST_F(DBToolTest, ImportListDeleteKey) {
       keyName,        "--path",        g_working_dir_path};
 
   std::istringstream passwordInput("a\na\n");
-  auto cinBuffer = std::cin.rdbuf();
-  std::cin.rdbuf(passwordInput.rdbuf());
+  StdInputStreamManipulator manipulator(passwordInput);
 
   DBTool tool;
   EXPECT_TRUE(tool.Run(importKeyArguments));
@@ -375,8 +380,6 @@ TEST_F(DBToolTest, ImportListDeleteKey) {
   const std::vector<std::string> deleteKeyArguments = {
       "--delete-key", keyName, "--path", g_working_dir_path};
   tool.Run(deleteKeyArguments);
-
-  std::cin.rdbuf(cinBuffer);
 }
 
 TEST_F(DBToolTest, ImportRsaKey) {
@@ -397,15 +400,12 @@ TEST_F(DBToolTest, WrongPathTest) {
 
 TEST_F(DBToolTest, WrongPassword) {
   std::istringstream passwordInput("wrongPassword\n");
+  StdInputStreamManipulator manipulator(passwordInput);
+
   const std::vector<std::string> arguments = {"--list-keys", "--path",
                                               g_working_dir_path};
-  auto cinBuffer = std::cin.rdbuf();
-  std::cin.rdbuf(passwordInput.rdbuf());
-
   DBTool tool;
   EXPECT_FALSE(tool.Run(arguments));
-
-  std::cin.rdbuf(cinBuffer);
 }
 
 }  // namespace nss_test
