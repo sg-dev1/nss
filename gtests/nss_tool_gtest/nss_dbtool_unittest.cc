@@ -9,6 +9,13 @@
 #include <string>
 #include <vector>
 
+#include <hasht.h>  // contains supported digest types
+#include <nss.h>
+#include <pk11pub.h>
+#include <prerror.h>
+#include <ctime>
+#include "scoped_ptrs.h"
+
 #include "dbtool.h"
 #include "gtest/gtest.h"
 
@@ -144,6 +151,76 @@ const uint8_t kEcPrivateKey[] = {
     0xbc, 0x64, 0xf2, 0xf1, 0xb2, 0x0c, 0x2d, 0x7e, 0x9f, 0x51, 0x77, 0xa3,
     0xc2, 0x94, 0xd4, 0x46, 0x22, 0x99};
 
+// TODO merge this with digest tool
+static bool ComputeDigest(std::istream &is, ScopedPK11Context &hashCtx) {
+  while (is) {
+    unsigned char buf[4096];
+    is.read(reinterpret_cast<char *>(buf), sizeof(buf));
+    if (is.fail() && !is.eof()) {
+      std::cerr << "Error reading from input stream." << std::endl;
+      return false;
+    }
+    SECStatus rv = PK11_DigestOp(hashCtx.get(), buf, is.gcount());
+    if (rv != SECSuccess) {
+      std::cerr << "PK11_DigestOp failed." << std::endl;
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// TODO merge this with digest tool
+static bool Digest(std::string &input, std::string &output) {
+  // no need for a db when calculating hash sum
+  SECStatus rv = NSS_NoDB_Init(".");
+  if (rv != SECSuccess) {
+    std::cerr << "NSS init failed!" << std::endl;
+    return false;
+  }
+
+  SECOidData *hashOID = SECOID_FindOIDByTag(SEC_OID_SHA256);
+  if (hashOID == nullptr) {
+    std::cerr << "Error: hashOid null!" << std::endl;
+    return false;
+  }
+  ScopedPK11Context hashCtx(PK11_CreateDigestContext(hashOID->offset));
+  if (hashCtx == nullptr) {
+    std::cerr << "Creating digest context failed with error: "
+              << PR_ErrorToName(PR_GetError()) << std::endl;
+    return false;
+  }
+  PK11_DigestBegin(hashCtx.get());
+
+  std::istringstream sstream(input);
+  if (!ComputeDigest(sstream, hashCtx)) {
+    return false;
+  }
+
+  unsigned char digest[HASH_LENGTH_MAX];
+  unsigned int len;
+  rv = PK11_DigestFinal(hashCtx.get(), digest, &len, HASH_LENGTH_MAX);
+  if (rv != SECSuccess || len == 0) {
+    std::cerr << "Calculating final hash value failed." << std::endl;
+    return false;
+  }
+
+  std::stringstream ss;
+  for (unsigned int i = 0; i < len; i++) {
+    ss << std::setw(2) << std::setfill('0') << std::hex
+       << static_cast<int>(digest[i]);
+  }
+  output = ss.str();
+
+  // shutdown nss
+  if (NSS_Shutdown() != SECSuccess) {
+    std::cerr << "NSS Shutdown failed!" << std::endl;
+    // ommit a negative return value
+  }
+
+  return true;
+}
+
 class DBToolTest : public ::testing::Test {
  protected:
   virtual void SetUp() {
@@ -172,7 +249,18 @@ class DBToolTest : public ::testing::Test {
   }
 
   std::string CreateTempFile(const char *data, const unsigned int dataLength) {
-    std::string tmpFilePath = g_working_dir_path + pathSep + "tempfile";
+    time_t t = time(0);
+    std::string timestamp(ctime(&t));
+    std::string fileName;
+    if (!Digest(timestamp, fileName)) {
+      std::cerr << "Warning: Getting filename for random file failed. Falling "
+                   "back to default one."
+                << std::endl;
+      fileName = "tempfile";
+    }
+
+    std::string tmpFilePath = g_working_dir_path + pathSep + fileName;
+    std::cout << "Using temporary file: " << tmpFilePath << std::endl;
     std::ofstream outfile(tmpFilePath, std::ofstream::binary);
     outfile.write(data, dataLength);
     outfile.close();
