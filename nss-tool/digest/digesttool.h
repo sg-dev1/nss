@@ -18,7 +18,6 @@ class DigestTool : public Tool {
 
  private:
   void Usage() override;
-  bool Digest(const ArgParser& parser, SECOidData* hashOID);
 };
 
 #endif  // digest_tool_h__

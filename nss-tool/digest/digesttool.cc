@@ -30,6 +30,9 @@ static SECOidData* HashTypeToOID(HASH_HashType hashtype) {
     case HASH_AlgSHA1:
       hashtag = SEC_OID_SHA1;
       break;
+    case HASH_AlgSHA224:
+      hashtag = SEC_OID_SHA224;
+      break;
     case HASH_AlgSHA256:
       hashtag = SEC_OID_SHA256;
       break;
@@ -39,9 +42,6 @@ static SECOidData* HashTypeToOID(HASH_HashType hashtype) {
     case HASH_AlgSHA512:
       hashtag = SEC_OID_SHA512;
       break;
-    case HASH_AlgSHA224:
-      hashtag = SEC_OID_SHA224;
-      break;
     default:
       return nullptr;
   }
@@ -50,44 +50,19 @@ static SECOidData* HashTypeToOID(HASH_HashType hashtype) {
 }
 
 static SECOidData* HashNameToOID(const std::string& hashName) {
-  size_t htypeInt;
-  SECOidData* hashOID;
-
-  for (htypeInt = HASH_AlgNULL + 1; htypeInt < HASH_AlgTOTAL; htypeInt++) {
-    hashOID = HashTypeToOID(static_cast<HASH_HashType>(htypeInt));
-    if (hashOID == nullptr) {
-      continue;
-    }
-
-    if (hashName == std::string(hashOID->desc)) {
-      break;
+  for (size_t htypeInt = HASH_AlgNULL + 1; htypeInt < HASH_AlgTOTAL;
+       htypeInt++) {
+    SECOidData* hashOID = HashTypeToOID(static_cast<HASH_HashType>(htypeInt));
+    if (hashOID && std::string(hashOID->desc) == hashName) {
+      return hashOID;
     }
   }
 
-  if (static_cast<HASH_HashType>(htypeInt) == HASH_AlgTOTAL) {
-    return nullptr;
-  }
-
-  return hashOID;
+  return nullptr;
 }
 
-static bool ComputeDigest(std::istream& is, ScopedPK11Context& hashCtx) {
-  while (is) {
-    unsigned char buf[4096];
-    is.read(reinterpret_cast<char*>(buf), sizeof(buf));
-    if (is.fail() && !is.eof()) {
-      std::cerr << "Error reading from input stream." << std::endl;
-      return false;
-    }
-    SECStatus rv = PK11_DigestOp(hashCtx.get(), buf, is.gcount());
-    if (rv != SECSuccess) {
-      std::cerr << "PK11_DigestOp failed." << std::endl;
-      return false;
-    }
-  }
-
-  return true;
-}
+static bool Digest(const ArgParser& parser, SECOidData* hashOID);
+static bool ComputeDigest(std::istream& is, ScopedPK11Context& hashCtx);
 
 bool DigestTool::Run(const std::vector<std::string>& arguments) {
   ArgParser parser(arguments);
@@ -108,7 +83,8 @@ bool DigestTool::Run(const std::vector<std::string>& arguments) {
   std::transform(hashName.begin(), hashName.end(), hashName.begin(), ::toupper);
   SECOidData* hashOID = HashNameToOID(hashName);
   if (hashOID == nullptr) {
-    std::cerr << "Error: Unknown digest type " << hashName << "." << std::endl;
+    std::cerr << "Error: Unknown digest type "
+              << parser.GetPositionalArgument(0) << "." << std::endl;
     return false;
   }
 
@@ -129,7 +105,7 @@ void DigestTool::Usage() {
             << std::endl;
 }
 
-bool DigestTool::Digest(const ArgParser& parser, SECOidData* hashOID) {
+static bool Digest(const ArgParser& parser, SECOidData* hashOID) {
   std::string inputFile;
   if (parser.Has("--infile")) {
     inputFile = parser.Get("--infile");
@@ -162,6 +138,24 @@ bool DigestTool::Digest(const ArgParser& parser, SECOidData* hashOID) {
               << static_cast<int>(digest[i]);
   }
   std::cout << std::endl;
+
+  return true;
+}
+
+static bool ComputeDigest(std::istream& is, ScopedPK11Context& hashCtx) {
+  while (is) {
+    unsigned char buf[4096];
+    is.read(reinterpret_cast<char*>(buf), sizeof(buf));
+    if (is.fail() && !is.eof()) {
+      std::cerr << "Error reading from input stream." << std::endl;
+      return false;
+    }
+    SECStatus rv = PK11_DigestOp(hashCtx.get(), buf, is.gcount());
+    if (rv != SECSuccess) {
+      std::cerr << "PK11_DigestOp failed." << std::endl;
+      return false;
+    }
+  }
 
   return true;
 }
