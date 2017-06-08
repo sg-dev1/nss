@@ -5,9 +5,6 @@
 #ifndef digest_tool_h__
 #define digest_tool_h__
 
-#include "argparse.h"
-
-#include <secoid.h>
 #include <string>
 #include <vector>
 #include "tool.h"

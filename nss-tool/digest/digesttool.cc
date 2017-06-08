@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "digesttool.h"
+#include "argparse.h"
 #include "scoped_ptrs.h"
 #include "util.h"
 
@@ -50,9 +51,8 @@ static SECOidData* HashTypeToOID(HASH_HashType hashtype) {
 }
 
 static SECOidData* HashNameToOID(const std::string& hashName) {
-  for (size_t htypeInt = HASH_AlgNULL + 1; htypeInt < HASH_AlgTOTAL;
-       htypeInt++) {
-    SECOidData* hashOID = HashTypeToOID(static_cast<HASH_HashType>(htypeInt));
+  for (size_t htype = HASH_AlgNULL + 1; htype < HASH_AlgTOTAL; htype++) {
+    SECOidData* hashOID = HashTypeToOID(static_cast<HASH_HashType>(htype));
     if (hashOID && std::string(hashOID->desc) == hashName) {
       return hashOID;
     }
@@ -100,7 +100,7 @@ bool DigestTool::Run(const std::vector<std::string>& arguments) {
 }
 
 void DigestTool::Usage() {
-  std::cerr << "Usage: nss digest md5|sha-1|sha-256|sha-384|sha-512|sha-224 "
+  std::cerr << "Usage: nss digest md5|sha-1|sha-224|sha-256|sha-384|sha-512 "
                "[--infile <path>]"
             << std::endl;
 }
@@ -133,7 +133,7 @@ static bool Digest(const ArgParser& parser, SECOidData* hashOID) {
   }
 
   // human readable output
-  for (unsigned int i = 0; i < len; i++) {
+  for (size_t i = 0; i < len; i++) {
     std::cout << std::setw(2) << std::setfill('0') << std::hex
               << static_cast<int>(digest[i]);
   }
