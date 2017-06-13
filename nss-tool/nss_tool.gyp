@@ -19,7 +19,6 @@
       'dependencies' : [
         'nss_tool_static',
         '<(DEPTH)/cpputil/cpputil.gyp:cpputil',
-        '<(DEPTH)/exports.gyp:dbm_exports',
         '<(DEPTH)/exports.gyp:nss_exports',
       ],
     },
