@@ -12,17 +12,15 @@
       'type' : 'executable',
       'sources' : [
         'nss_tool.cc',
-        'common/argparse.cc',
-        'common/util.cc',
-        'db/dbtool.cc',
-        'enc/enctool.cc',
-        'digest/digesttool.cc'
       ],
       'include_dirs': [
         'common',
       ],
       'dependencies' : [
         'nss_tool_static',
+        '<(DEPTH)/cpputil/cpputil.gyp:cpputil',
+        '<(DEPTH)/exports.gyp:dbm_exports',
+        '<(DEPTH)/exports.gyp:nss_exports',
       ],
     },
     {
@@ -32,6 +30,8 @@
         'common/argparse.cc',
         'common/util.cc',
         'db/dbtool.cc',
+        'enc/enctool.cc',
+        'digest/digesttool.cc'
       ],
       'include_dirs': [
         'common',
@@ -40,7 +40,7 @@
         '<(DEPTH)/cpputil/cpputil.gyp:cpputil',
         '<(DEPTH)/exports.gyp:dbm_exports',
         '<(DEPTH)/exports.gyp:nss_exports',
-      ]
+      ],
     },
   ],
 }
