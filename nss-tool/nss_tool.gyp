@@ -35,11 +35,11 @@
       'include_dirs': [
         'common',
       ],
-      'dependencies': [
+      'dependencies' : [
         '<(DEPTH)/cpputil/cpputil.gyp:cpputil',
         '<(DEPTH)/exports.gyp:dbm_exports',
         '<(DEPTH)/exports.gyp:nss_exports',
       ],
-    },
+    }
   ],
 }

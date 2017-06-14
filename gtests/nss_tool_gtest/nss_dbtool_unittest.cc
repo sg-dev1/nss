@@ -175,8 +175,7 @@ class DBToolTest : public ::testing::Test {
 
     const std::vector<std::string> arguments = {"--create", "--path",
                                                 g_working_dir_path};
-    DBTool tool;
-    EXPECT_TRUE(tool.Run(arguments));
+    RunTool(arguments);
   }
 
   virtual void TearDown() {
